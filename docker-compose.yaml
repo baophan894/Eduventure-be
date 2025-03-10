@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  stripe-cli:
+    image: stripe/stripe-cli 
+    container_name: stripe-cli
+    command: "listen --api-key sk_test_51NhOiqFwiLeydcwjFiac5xebXeAJlL1ygtESPrNpTKU6TuyCHpdl34n4iOp3u99Guofm9JB2EEaZHL9qeVQ2UXaf00aB8IWj6f --forward-to host.docker.internal:8080/webhook"
+volumes:
+  db:
+# khi thanh toan thi srtipe gui ve CLI 1 event va forward ve lai server 
+
+
+
+
+
