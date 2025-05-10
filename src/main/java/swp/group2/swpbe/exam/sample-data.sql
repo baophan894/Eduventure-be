@@ -114,11 +114,6 @@ INSERT INTO test_target_scores (test_id, score) VALUES
 (2, 800),
 (2, 900);
 
--- Insert related tests
-INSERT INTO related_tests (test_id, related_test_id, related_test_title) VALUES
-(1, 2, 'TOEIC Reading Practice Test 1'),
-(2, 1, 'TOEIC Listening Practice Test 1');
-
 -- Insert sample reviews
 INSERT INTO test_reviews (test_id, user_id, rating, review_date, comment) VALUES
 (1, 97, 5, '2023-10-02', 'This test was an excellent TOEIC listening practice. The questions were just like the real exam, and the explanations were clear and helpful!'),

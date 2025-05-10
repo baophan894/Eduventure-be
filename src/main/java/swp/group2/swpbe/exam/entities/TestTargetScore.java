@@ -20,5 +20,5 @@ public class TestTargetScore {
     private Test test;
 
     @Column(name = "score", nullable = false)
-    private Integer score;
+    private String score;
 }

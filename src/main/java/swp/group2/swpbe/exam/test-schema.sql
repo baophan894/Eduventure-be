@@ -10,7 +10,6 @@ USE records;
 --   - test_requirements
 --   - test_target_scores
 --   - test_reviews
---   - related_tests
 
 -- test_parts is referenced by questions
 -- questions is referenced by question_options
@@ -119,15 +118,6 @@ CREATE TABLE test_reviews (
     comment TEXT,
     FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
-);
-
--- Related Tests Table
-CREATE TABLE related_tests (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    test_id INT NOT NULL,
-    related_test_id INT NOT NULL,
-    related_test_title VARCHAR(255) NOT NULL,
-    FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
 );
 
 -- Insert initial test types

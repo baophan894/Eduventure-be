@@ -78,9 +78,6 @@ public class Test {
     @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TestReview> testReviews = new ArrayList<>();
 
-    @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RelatedTest> relatedTests = new ArrayList<>();
-
     // Helper methods for collection management
     public void addTestPart(TestPart part) {
         testParts.add(part);
@@ -130,15 +127,5 @@ public class Test {
     public void removeTestReview(TestReview review) {
         testReviews.remove(review);
         review.setTest(null);
-    }
-
-    public void addRelatedTest(RelatedTest relatedTest) {
-        relatedTests.add(relatedTest);
-        relatedTest.setTest(this);
-    }
-
-    public void removeRelatedTest(RelatedTest relatedTest) {
-        relatedTests.remove(relatedTest);
-        relatedTest.setTest(null);
     }
 }

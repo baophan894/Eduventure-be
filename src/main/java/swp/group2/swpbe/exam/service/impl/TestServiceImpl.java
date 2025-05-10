@@ -1,8 +1,10 @@
 package swp.group2.swpbe.exam.service.impl;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import swp.group2.swpbe.exam.dto.QuestionDTO;
 import swp.group2.swpbe.exam.dto.QuestionOptionDTO;
 import swp.group2.swpbe.exam.dto.TestDTO;
@@ -23,11 +26,15 @@ import swp.group2.swpbe.exam.entities.Question;
 import swp.group2.swpbe.exam.entities.QuestionOption;
 import swp.group2.swpbe.exam.entities.QuestionType;
 import swp.group2.swpbe.exam.entities.Test;
+import swp.group2.swpbe.exam.entities.TestFeature;
 import swp.group2.swpbe.exam.entities.TestPart;
+import swp.group2.swpbe.exam.entities.TestRequirement;
+import swp.group2.swpbe.exam.entities.TestTargetScore;
 import swp.group2.swpbe.exam.entities.TestType;
 import swp.group2.swpbe.exam.repository.TestRepository;
 import swp.group2.swpbe.exam.service.TestService;
 
+@Slf4j
 @Service
 public class TestServiceImpl implements TestService {
 
@@ -77,6 +84,86 @@ public class TestServiceImpl implements TestService {
         testType.setId(testDTO.getTypeId());
         test.setType(testType);
 
+        // Update test features
+        if (testDTO.getTestFeatures() != null) {
+            // Create a map of existing features by feature text for quick lookup
+            Map<String, TestFeature> existingFeatures = test.getTestFeatures().stream()
+                    .collect(Collectors.toMap(TestFeature::getFeature, feature -> feature));
+
+            // Process each feature from the DTO
+            for (String featureText : testDTO.getTestFeatures()) {
+                TestFeature feature;
+                if (existingFeatures.containsKey(featureText)) {
+                    // Update existing feature
+                    feature = existingFeatures.get(featureText);
+                    existingFeatures.remove(featureText);
+                } else {
+                    // Create new feature
+                    feature = new TestFeature();
+                    test.addTestFeature(feature);
+                }
+                feature.setFeature(featureText);
+            }
+
+            // Remove any remaining features that weren't updated
+            for (TestFeature feature : existingFeatures.values()) {
+                test.removeTestFeature(feature);
+            }
+        }
+
+        // Update test requirements
+        if (testDTO.getTestRequirements() != null) {
+            // Create a map of existing requirements by requirement text for quick lookup
+            Map<String, TestRequirement> existingRequirements = test.getTestRequirements().stream()
+                    .collect(Collectors.toMap(TestRequirement::getRequirement, requirement -> requirement));
+
+            // Process each requirement from the DTO
+            for (String requirementText : testDTO.getTestRequirements()) {
+                TestRequirement requirement;
+                if (existingRequirements.containsKey(requirementText)) {
+                    // Update existing requirement
+                    requirement = existingRequirements.get(requirementText);
+                    existingRequirements.remove(requirementText);
+                } else {
+                    // Create new requirement
+                    requirement = new TestRequirement();
+                    test.addTestRequirement(requirement);
+                }
+                requirement.setRequirement(requirementText);
+            }
+
+            // Remove any remaining requirements that weren't updated
+            for (TestRequirement requirement : existingRequirements.values()) {
+                test.removeTestRequirement(requirement);
+            }
+        }
+
+        // Handle target scores
+        Map<String, TestTargetScore> existingTargetScores = test.getTestTargetScores().stream()
+                .collect(Collectors.toMap(TestTargetScore::getScore, Function.identity()));
+
+        if (testDTO.getTestTargetScores() != null) {
+            for (String scoreText : testDTO.getTestTargetScores()) {
+                if (existingTargetScores.containsKey(scoreText)) {
+                    // Update existing target score
+                    TestTargetScore existingScore = existingTargetScores.get(scoreText);
+                    existingScore.setScore(scoreText);
+                    existingTargetScores.remove(scoreText);
+                } else {
+                    // Create new target score
+                    TestTargetScore newScore = new TestTargetScore();
+                    newScore.setTest(test);
+                    newScore.setScore(scoreText);
+                    test.getTestTargetScores().add(newScore);
+                }
+            }
+        }
+
+        // Remove any remaining target scores that weren't in the new list
+        for (TestTargetScore oldScore : existingTargetScores.values()) {
+            test.getTestTargetScores().remove(oldScore);
+        }
+
         // Update test parts
         if (testDTO.getTestParts() != null) {
             // Create a map of existing test parts by name for quick lookup
@@ -100,6 +187,11 @@ public class TestServiceImpl implements TestService {
                 part.setIcon(partDTO.getIcon());
                 part.setDuration(partDTO.getDuration());
                 part.setDescription(partDTO.getDescription());
+
+                // Initialize questions list if null
+                if (part.getQuestions() == null) {
+                    part.setQuestions(new ArrayList<>());
+                }
 
                 // Update questions
                 if (partDTO.getQuestions() != null) {
@@ -133,6 +225,11 @@ public class TestServiceImpl implements TestService {
                         QuestionType questionType = new QuestionType();
                         questionType.setId(questionDTO.getTypeId());
                         question.setType(questionType);
+
+                        // Initialize question options list if null
+                        if (question.getQuestionOptions() == null) {
+                            question.setQuestionOptions(new ArrayList<>());
+                        }
 
                         // Update question options
                         if (questionDTO.getQuestionOptions() != null) {
@@ -203,20 +300,39 @@ public class TestServiceImpl implements TestService {
         }
 
         List<TestListDTO> testDTOs = testPage.getContent().stream()
-                .map(test -> new TestListDTO(
-                        test.getId(),
-                        test.getType().getId(),
-                        test.getTitle(),
-                        test.getDescription(),
-                        test.getCoverImg(),
-                        test.getViews(),
-                        test.getRatings(),
-                        test.getReviewCount(),
-                        test.getDuration(),
-                        test.getDifficulty(),
-                        test.getLastUpdated(),
-                        test.getInstructorName(),
-                        test.getInstructorTitle()))
+                .map(test -> {
+                    TestListDTO dto = new TestListDTO(
+                            test.getId(),
+                            test.getType().getId(),
+                            test.getTitle(),
+                            test.getDescription(),
+                            test.getCoverImg(),
+                            test.getViews(),
+                            test.getRatings(),
+                            test.getReviewCount(),
+                            test.getDuration(),
+                            test.getDifficulty(),
+                            test.getLastUpdated(),
+                            test.getInstructorName(),
+                            test.getInstructorTitle());
+
+                    // Add test features
+                    dto.setTestFeatures(test.getTestFeatures().stream()
+                            .map(TestFeature::getFeature)
+                            .collect(Collectors.toList()));
+
+                    // Add test requirements
+                    dto.setTestRequirements(test.getTestRequirements().stream()
+                            .map(TestRequirement::getRequirement)
+                            .collect(Collectors.toList()));
+
+                    // Add test target scores
+                    dto.setTestTargetScores(test.getTestTargetScores().stream()
+                            .map(score -> score.getScore())
+                            .collect(Collectors.toList()));
+
+                    return dto;
+                })
                 .collect(Collectors.toList());
 
         return new TestResponseDTO(
@@ -247,67 +363,201 @@ public class TestServiceImpl implements TestService {
         testType.setId(dto.getTypeId());
         test.setType(testType);
 
+        // Update test features
+        if (dto.getTestFeatures() != null) {
+            // Create a map of existing features by feature text for quick lookup
+            Map<String, TestFeature> existingFeatures = test.getTestFeatures().stream()
+                    .collect(Collectors.toMap(TestFeature::getFeature, feature -> feature));
+
+            // Process each feature from the DTO
+            for (String featureText : dto.getTestFeatures()) {
+                TestFeature feature;
+                if (existingFeatures.containsKey(featureText)) {
+                    // Update existing feature
+                    feature = existingFeatures.get(featureText);
+                    existingFeatures.remove(featureText);
+                } else {
+                    // Create new feature
+                    feature = new TestFeature();
+                    test.addTestFeature(feature);
+                }
+                feature.setFeature(featureText);
+            }
+
+            // Remove any remaining features that weren't updated
+            for (TestFeature feature : existingFeatures.values()) {
+                test.removeTestFeature(feature);
+            }
+        }
+
+        // Update test requirements
+        if (dto.getTestRequirements() != null) {
+            // Create a map of existing requirements by requirement text for quick lookup
+            Map<String, TestRequirement> existingRequirements = test.getTestRequirements().stream()
+                    .collect(Collectors.toMap(TestRequirement::getRequirement, requirement -> requirement));
+
+            // Process each requirement from the DTO
+            for (String requirementText : dto.getTestRequirements()) {
+                TestRequirement requirement;
+                if (existingRequirements.containsKey(requirementText)) {
+                    // Update existing requirement
+                    requirement = existingRequirements.get(requirementText);
+                    existingRequirements.remove(requirementText);
+                } else {
+                    // Create new requirement
+                    requirement = new TestRequirement();
+                    test.addTestRequirement(requirement);
+                }
+                requirement.setRequirement(requirementText);
+            }
+
+            // Remove any remaining requirements that weren't updated
+            for (TestRequirement requirement : existingRequirements.values()) {
+                test.removeTestRequirement(requirement);
+            }
+        }
+
+        // Handle target scores
+        Map<String, TestTargetScore> existingTargetScores = test.getTestTargetScores().stream()
+                .collect(Collectors.toMap(TestTargetScore::getScore, Function.identity()));
+
+        if (dto.getTestTargetScores() != null) {
+            for (String scoreText : dto.getTestTargetScores()) {
+                if (existingTargetScores.containsKey(scoreText)) {
+                    // Update existing target score
+                    TestTargetScore existingScore = existingTargetScores.get(scoreText);
+                    existingScore.setScore(scoreText);
+                    existingTargetScores.remove(scoreText);
+                } else {
+                    // Create new target score
+                    TestTargetScore newScore = new TestTargetScore();
+                    newScore.setTest(test);
+                    newScore.setScore(scoreText);
+                    test.getTestTargetScores().add(newScore);
+                }
+            }
+        }
+
+        // Remove any remaining target scores that weren't in the new list
+        for (TestTargetScore oldScore : existingTargetScores.values()) {
+            test.getTestTargetScores().remove(oldScore);
+        }
+
         // Update test parts
         if (dto.getTestParts() != null) {
-            List<TestPart> testParts = dto.getTestParts().stream()
-                    .map(partDTO -> {
-                        TestPart part = new TestPart();
-                        part.setTest(test);
-                        part.setName(partDTO.getName());
-                        part.setIcon(partDTO.getIcon());
-                        part.setDuration(partDTO.getDuration());
-                        part.setDescription(partDTO.getDescription());
+            // Create a map of existing test parts by name for quick lookup
+            Map<String, TestPart> existingParts = test.getTestParts().stream()
+                    .collect(Collectors.toMap(TestPart::getName, part -> part));
 
-                        // Update questions
-                        if (partDTO.getQuestions() != null) {
-                            List<Question> questions = partDTO.getQuestions().stream()
-                                    .map(questionDTO -> {
-                                        Question question = new Question();
-                                        question.setPart(part);
-                                        question.setTitle(questionDTO.getTitle());
-                                        question.setQuestionInstruction(questionDTO.getQuestionInstruction());
-                                        question.setAnswerInstruction(questionDTO.getAnswerInstruction());
-                                        question.setAudioUrl(questionDTO.getAudioUrl());
-                                        question.setImageUrl(questionDTO.getImageUrl());
-                                        question.setReadingPassage(questionDTO.getReadingPassage());
-                                        question.setCorrectAnswer(questionDTO.getCorrectAnswer());
+            // Process each part from the DTO
+            for (TestPartDTO partDTO : dto.getTestParts()) {
+                TestPart part;
+                if (existingParts.containsKey(partDTO.getName())) {
+                    // Update existing part
+                    part = existingParts.get(partDTO.getName());
+                    existingParts.remove(partDTO.getName());
+                } else {
+                    // Create new part
+                    part = new TestPart();
+                    test.addTestPart(part);
+                }
 
-                                        // Set question type
-                                        QuestionType questionType = new QuestionType();
-                                        questionType.setId(questionDTO.getTypeId());
-                                        question.setType(questionType);
+                part.setName(partDTO.getName());
+                part.setIcon(partDTO.getIcon());
+                part.setDuration(partDTO.getDuration());
+                part.setDescription(partDTO.getDescription());
 
-                                        // Update question options
-                                        if (questionDTO.getQuestionOptions() != null) {
-                                            List<QuestionOption> options = questionDTO.getQuestionOptions().stream()
-                                                    .map(optionDTO -> {
-                                                        QuestionOption option = new QuestionOption();
-                                                        option.setQuestion(question);
-                                                        option.setOptionId(optionDTO.getOptionId());
-                                                        option.setText(optionDTO.getText());
-                                                        return option;
-                                                    })
-                                                    .collect(Collectors.toList());
-                                            question.setQuestionOptions(options);
-                                        }
+                // Initialize questions list if null
+                if (part.getQuestions() == null) {
+                    part.setQuestions(new ArrayList<>());
+                }
 
-                                        return question;
-                                    })
-                                    .collect(Collectors.toList());
-                            part.setQuestions(questions);
+                // Update questions
+                if (partDTO.getQuestions() != null) {
+                    // Create a map of existing questions by title for quick lookup
+                    Map<String, Question> existingQuestions = part.getQuestions().stream()
+                            .collect(Collectors.toMap(Question::getTitle, question -> question));
+
+                    // Process each question from the DTO
+                    for (QuestionDTO questionDTO : partDTO.getQuestions()) {
+                        Question question;
+                        if (existingQuestions.containsKey(questionDTO.getTitle())) {
+                            // Update existing question
+                            question = existingQuestions.get(questionDTO.getTitle());
+                            existingQuestions.remove(questionDTO.getTitle());
+                        } else {
+                            // Create new question
+                            question = new Question();
+                            question.setPart(part);
+                            part.getQuestions().add(question);
                         }
 
-                        return part;
-                    })
-                    .collect(Collectors.toList());
-            test.setTestParts(testParts);
+                        question.setTitle(questionDTO.getTitle());
+                        question.setQuestionInstruction(questionDTO.getQuestionInstruction());
+                        question.setAnswerInstruction(questionDTO.getAnswerInstruction());
+                        question.setAudioUrl(questionDTO.getAudioUrl());
+                        question.setImageUrl(questionDTO.getImageUrl());
+                        question.setReadingPassage(questionDTO.getReadingPassage());
+                        question.setCorrectAnswer(questionDTO.getCorrectAnswer());
+
+                        // Set question type
+                        QuestionType questionType = new QuestionType();
+                        questionType.setId(questionDTO.getTypeId());
+                        question.setType(questionType);
+
+                        // Initialize question options list if null
+                        if (question.getQuestionOptions() == null) {
+                            question.setQuestionOptions(new ArrayList<>());
+                        }
+
+                        // Update question options
+                        if (questionDTO.getQuestionOptions() != null) {
+                            // Create a map of existing options by optionId for quick lookup
+                            Map<String, QuestionOption> existingOptions = question.getQuestionOptions().stream()
+                                    .collect(Collectors.toMap(QuestionOption::getOptionId, option -> option));
+
+                            // Process each option from the DTO
+                            for (QuestionOptionDTO optionDTO : questionDTO.getQuestionOptions()) {
+                                QuestionOption option;
+                                if (existingOptions.containsKey(optionDTO.getOptionId())) {
+                                    // Update existing option
+                                    option = existingOptions.get(optionDTO.getOptionId());
+                                    existingOptions.remove(optionDTO.getOptionId());
+                                } else {
+                                    // Create new option
+                                    option = new QuestionOption();
+                                    option.setQuestion(question);
+                                    question.getQuestionOptions().add(option);
+                                }
+
+                                option.setOptionId(optionDTO.getOptionId());
+                                option.setText(optionDTO.getText());
+                            }
+
+                            // Remove any remaining options that weren't updated
+                            for (QuestionOption option : existingOptions.values()) {
+                                question.getQuestionOptions().remove(option);
+                            }
+                        }
+                    }
+
+                    // Remove any remaining questions that weren't updated
+                    for (Question question : existingQuestions.values()) {
+                        part.getQuestions().remove(question);
+                    }
+                }
+            }
+
+            // Remove any remaining parts that weren't updated
+            for (TestPart part : existingParts.values()) {
+                test.removeTestPart(part);
+            }
         }
     }
 
     private TestDTO convertToDTO(Test test) {
         TestDTO dto = new TestDTO();
         dto.setId(test.getId());
-        dto.setTypeId(test.getType().getId());
         dto.setTitle(test.getTitle());
         dto.setDescription(test.getDescription());
         dto.setCoverImg(test.getCoverImg());
@@ -321,58 +571,65 @@ public class TestServiceImpl implements TestService {
         dto.setInstructorTitle(test.getInstructorTitle());
         dto.setInstructorExperience(test.getInstructorExperience());
         dto.setInstructorDescription(test.getInstructorDescription());
+        dto.setTypeId(test.getType().getId());
+
+        // Convert test features
+        dto.setTestFeatures(test.getTestFeatures().stream()
+                .map(TestFeature::getFeature)
+                .collect(Collectors.toList()));
+
+        // Convert test requirements
+        dto.setTestRequirements(test.getTestRequirements().stream()
+                .map(TestRequirement::getRequirement)
+                .collect(Collectors.toList()));
+
+        // Convert test target scores
+        dto.setTestTargetScores(test.getTestTargetScores().stream()
+                .map(score -> score.getScore())
+                .collect(Collectors.toList()));
 
         // Convert test parts
-        if (test.getTestParts() != null) {
-            List<TestPartDTO> partDTOs = test.getTestParts().stream()
-                    .map(part -> {
-                        TestPartDTO partDTO = new TestPartDTO();
-                        partDTO.setId(part.getId());
-                        partDTO.setName(part.getName());
-                        partDTO.setIcon(part.getIcon());
-                        partDTO.setDuration(part.getDuration());
-                        partDTO.setDescription(part.getDescription());
+        dto.setTestParts(test.getTestParts().stream()
+                .map(part -> {
+                    TestPartDTO partDTO = new TestPartDTO();
+                    partDTO.setId(part.getId());
+                    partDTO.setName(part.getName());
+                    partDTO.setIcon(part.getIcon());
+                    partDTO.setDuration(part.getDuration());
+                    partDTO.setDescription(part.getDescription());
 
-                        // Convert questions
-                        if (part.getQuestions() != null) {
-                            List<QuestionDTO> questionDTOs = part.getQuestions().stream()
-                                    .map(question -> {
-                                        QuestionDTO questionDTO = new QuestionDTO();
-                                        questionDTO.setId(question.getId());
-                                        questionDTO.setTypeId(question.getType().getId());
-                                        questionDTO.setTitle(question.getTitle());
-                                        questionDTO.setQuestionInstruction(question.getQuestionInstruction());
-                                        questionDTO.setAnswerInstruction(question.getAnswerInstruction());
-                                        questionDTO.setAudioUrl(question.getAudioUrl());
-                                        questionDTO.setImageUrl(question.getImageUrl());
-                                        questionDTO.setReadingPassage(question.getReadingPassage());
-                                        questionDTO.setCorrectAnswer(question.getCorrectAnswer());
+                    // Convert questions
+                    partDTO.setQuestions(part.getQuestions().stream()
+                            .map(question -> {
+                                QuestionDTO questionDTO = new QuestionDTO();
+                                questionDTO.setId(question.getId());
+                                questionDTO.setTitle(question.getTitle());
+                                questionDTO.setQuestionInstruction(question.getQuestionInstruction());
+                                questionDTO.setAnswerInstruction(question.getAnswerInstruction());
+                                questionDTO.setAudioUrl(question.getAudioUrl());
+                                questionDTO.setImageUrl(question.getImageUrl());
+                                questionDTO.setReadingPassage(question.getReadingPassage());
+                                questionDTO.setCorrectAnswer(question.getCorrectAnswer());
+                                questionDTO.setTypeId(question.getType().getId());
 
-                                        // Convert question options
-                                        if (question.getQuestionOptions() != null) {
-                                            List<QuestionOptionDTO> optionDTOs = question.getQuestionOptions().stream()
-                                                    .map(option -> {
-                                                        QuestionOptionDTO optionDTO = new QuestionOptionDTO();
-                                                        optionDTO.setId(option.getId());
-                                                        optionDTO.setOptionId(option.getOptionId());
-                                                        optionDTO.setText(option.getText());
-                                                        return optionDTO;
-                                                    })
-                                                    .collect(Collectors.toList());
-                                            questionDTO.setQuestionOptions(optionDTOs);
-                                        }
+                                // Convert question options
+                                questionDTO.setQuestionOptions(question.getQuestionOptions().stream()
+                                        .map(option -> {
+                                            QuestionOptionDTO optionDTO = new QuestionOptionDTO();
+                                            optionDTO.setId(option.getId());
+                                            optionDTO.setOptionId(option.getOptionId());
+                                            optionDTO.setText(option.getText());
+                                            return optionDTO;
+                                        })
+                                        .collect(Collectors.toList()));
 
-                                        return questionDTO;
-                                    })
-                                    .collect(Collectors.toList());
-                            partDTO.setQuestions(questionDTOs);
-                        }
+                                return questionDTO;
+                            })
+                            .collect(Collectors.toList()));
 
-                        return partDTO;
-                    })
-                    .collect(Collectors.toList());
-            dto.setTestParts(partDTOs);
-        }
+                    return partDTO;
+                })
+                .collect(Collectors.toList()));
 
         return dto;
     }
