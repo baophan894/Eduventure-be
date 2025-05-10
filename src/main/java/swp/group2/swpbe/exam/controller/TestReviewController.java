@@ -1,13 +1,21 @@
 package swp.group2.swpbe.exam.controller;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.validation.Valid;
 import swp.group2.swpbe.exam.dto.TestReviewDTO;
 import swp.group2.swpbe.exam.service.TestReviewService;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/tests")
@@ -29,23 +37,17 @@ public class TestReviewController {
     }
 
     @PostMapping("/{testId}/reviews")
-    public ResponseEntity<?> createReview(
+    public ResponseEntity<TestReviewDTO> createReview(
             @PathVariable Integer testId,
-            @RequestBody TestReviewDTO reviewDTO) {
-        try {
-            return ResponseEntity.ok(testReviewService.createReview(testId, reviewDTO));
-        } catch (DataIntegrityViolationException e) {
-            return ResponseEntity
-                    .status(HttpStatus.CONFLICT)
-                    .body("User has already reviewed this test");
-        }
+            @Valid @RequestBody TestReviewDTO reviewDTO) {
+        return ResponseEntity.ok(testReviewService.createReview(testId, reviewDTO));
     }
 
     @PutMapping("/{testId}/reviews/{reviewId}")
     public ResponseEntity<TestReviewDTO> updateReview(
             @PathVariable Integer testId,
             @PathVariable Integer reviewId,
-            @RequestBody TestReviewDTO reviewDTO) {
+            @Valid @RequestBody TestReviewDTO reviewDTO) {
         return ResponseEntity.ok(testReviewService.updateReview(testId, reviewId, reviewDTO));
     }
 

@@ -120,6 +120,36 @@ CREATE TABLE test_reviews (
     FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
 );
 
+-- Test Submissions Table
+CREATE TABLE test_submissions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    test_id INT NOT NULL,
+    user_id BIGINT NOT NULL,
+    submitted_at DATETIME NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    FOREIGN KEY (test_id) REFERENCES tests(id)
+);
+
+-- Test Submission Parts Table
+CREATE TABLE test_submission_parts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    submission_id INT NOT NULL,
+    part_id INT NOT NULL,
+    FOREIGN KEY (submission_id) REFERENCES test_submissions(id) ON DELETE CASCADE,
+    FOREIGN KEY (part_id) REFERENCES test_parts(id) ON DELETE CASCADE
+);
+
+-- Submitted Answers Table
+CREATE TABLE submitted_answers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    submission_id INT NOT NULL,
+    question_id INT NOT NULL,
+    written_answer TEXT,
+    is_correct BOOLEAN,
+    FOREIGN KEY (submission_id) REFERENCES test_submissions(id) ON DELETE CASCADE,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
+
 -- Insert initial test types
 INSERT INTO test_types (name) VALUES
 ('LISTENING'),
