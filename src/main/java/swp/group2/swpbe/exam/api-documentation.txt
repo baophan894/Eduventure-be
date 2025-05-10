@@ -1,0 +1,312 @@
+# Eduventure Test API Documentation
+
+## Test Endpoints
+
+### 1. Create Test
+POST /api/tests
+```json
+{
+  "typeId": 1,
+  "title": "TOEIC Listening Practice Test",
+  "description": "Practice test for TOEIC Listening section",
+  "coverImg": "toeic-listening.jpg",
+  "views": 0,
+  "ratings": 0.0,
+  "reviewCount": 0,
+  "duration": 3600,
+  "difficulty": "INTERMEDIATE",
+  "lastUpdated": "2024-03-20T10:00:00",
+  "instructorName": "John Doe",
+  "instructorTitle": "TOEIC Expert",
+  "instructorExperience": "5 years",
+  "instructorDescription": "Certified TOEIC instructor with 5 years of experience",
+  "testFeatures": [
+    "Full-length practice test",
+    "Detailed explanations",
+    "Score analysis"
+  ],
+  "testRequirements": [
+    "Basic English knowledge",
+    "Headphones for listening section"
+  ],
+  "testTargetScores": ["600", "700", "800"],
+  "testParts": [
+    {
+      "id": 1,
+      "name": "Part 1: Photographs",
+      "icon": "camera",
+      "duration": 600,
+      "description": "Look at the picture and select the statement that best describes it",
+      "questions": [
+        {
+          "id": 1,
+          "typeId": 1,
+          "title": "Question 1",
+          "questionInstruction": "Look at the picture and select the statement that best describes it",
+          "answerInstruction": "Choose the best answer",
+          "audioUrl": "audio1.mp3",
+          "imageUrl": "image1.jpg",
+          "readingPassage": null,
+          "correctAnswer": "A",
+          "questionOptions": [
+            {
+              "id": 1,
+              "optionId": "A",
+              "text": "The man is working at a desk"
+            },
+            {
+              "id": 2,
+              "optionId": "B",
+              "text": "The man is standing in a meeting"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 2. Get Test by ID
+GET /api/tests/{id}
+
+### 3. Update Test
+PUT /api/tests/{id}
+```json
+{
+  "typeId": 1,
+  "title": "Updated TOEIC Listening Practice Test",
+  "description": "Updated practice test for TOEIC Listening section",
+  "coverImg": "updated-toeic-listening.jpg",
+  "views": 100,
+  "ratings": 4.5,
+  "reviewCount": 10,
+  "duration": 3600,
+  "difficulty": "ADVANCED",
+  "lastUpdated": "2024-03-20T11:00:00",
+  "instructorName": "John Doe",
+  "instructorTitle": "Senior TOEIC Expert",
+  "instructorExperience": "6 years",
+  "instructorDescription": "Updated instructor description",
+  "testFeatures": [
+    "Updated feature 1",
+    "Updated feature 2"
+  ],
+  "testRequirements": [
+    "Updated requirement 1",
+    "Updated requirement 2"
+  ],
+  "testTargetScores": ["650", "750", "850"],
+  "testParts": [
+    {
+      "id": 1,
+      "name": "Updated Part 1",
+      "icon": "camera",
+      "duration": 600,
+      "description": "Updated description",
+      "questions": [
+        {
+          "id": 1,
+          "typeId": 1,
+          "title": "Updated Question 1",
+          "questionInstruction": "Updated instruction",
+          "answerInstruction": "Updated answer instruction",
+          "audioUrl": "updated-audio1.mp3",
+          "imageUrl": "updated-image1.jpg",
+          "readingPassage": null,
+          "correctAnswer": "B",
+          "questionOptions": [
+            {
+              "id": 1,
+              "optionId": "A",
+              "text": "Updated option A"
+            },
+            {
+              "id": 2,
+              "optionId": "B",
+              "text": "Updated option B"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 4. Delete Test
+DELETE /api/tests/{id}
+
+### 5. Get All Tests
+GET /api/tests?page=0&size=8&search=toeic
+
+Response:
+```json
+{
+  "tests": [
+    {
+      "id": 1,
+      "typeId": 1,
+      "title": "TOEIC Listening Practice Test",
+      "description": "Practice test for TOEIC Listening section",
+      "coverImg": "toeic-listening.jpg",
+      "views": 100,
+      "ratings": 4.5,
+      "reviewCount": 10,
+      "duration": 3600,
+      "difficulty": "INTERMEDIATE",
+      "lastUpdated": "2024-03-20T10:00:00",
+      "instructorName": "John Doe",
+      "instructorTitle": "TOEIC Expert",
+      "testFeatures": ["Feature 1", "Feature 2"],
+      "testRequirements": ["Requirement 1", "Requirement 2"],
+      "testTargetScores": ["600", "700", "800"]
+    }
+  ],
+  "currentPage": 0,
+  "totalPages": 5,
+  "totalItems": 40,
+  "pageSize": 8
+}
+```
+
+## Test Submission Endpoints
+
+### 1. Create Test Submission
+POST /api/test-submissions
+```json
+{
+  "testId": 1,
+  "userId": 103,
+  "submittedAt": "2024-03-20T11:30:00",
+  "partIds": [1, 2],  // Optional: specify which parts to take
+  "submittedAnswers": [
+    {
+      "questionId": 7,
+      "writtenAnswer": "employment"  // For Fill in Blank questions
+    },
+    {
+      "questionId": 9,
+      "selectedOptions": [  // For Single Choice questions
+        {
+          "optionId": "A"
+        }
+      ]
+    },
+    {
+      "questionId": 11,
+      "selectedOptions": [  // For Multiple Choice questions
+        {
+          "optionId": "B"
+        },
+        {
+          "optionId": "C"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 2. Get Submission by ID
+GET /api/test-submissions/{id}
+
+Response:
+```json
+{
+  "id": 1,
+  "testId": 1,
+  "userId": 103,
+  "submittedAt": "2024-03-20T11:30:00",
+  "status": "SUBMITTED",
+  "totalCorrectAnswers": 17,
+  "totalQuestions": 20,
+  "partSubmissions": [
+    {
+      "partId": 1,
+      "partName": "Part 1: Photographs",
+      "partDescription": "Look at the picture and select the statement that best describes it",
+      "partDuration": 600,
+      "partIcon": "camera",
+      "correctAnswers": 5,
+      "totalQuestions": 6,
+      "answers": [
+        {
+          "id": 1,
+          "questionId": 1,
+          "writtenAnswer": null,
+          "isCorrect": true,
+          "selectedOptionIds": ["A"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 3. Get All Submissions
+GET /api/test-submissions?userId=103&testId=1&page=0&size=10
+
+### 4. Delete Submission
+DELETE /api/test-submissions/{id}
+
+## Test Review Endpoints
+
+### 1. Create Test Review
+POST /api/tests/{testId}/reviews
+```json
+{
+  "userId": 103,
+  "rating": 5,
+  "comment": "Excellent practice test with comprehensive explanations"
+}
+```
+
+### 2. Get Reviews by Test ID
+GET /api/tests/{testId}/reviews
+
+Response:
+```json
+[
+  {
+    "id": 1,
+    "testId": 1,
+    "userId": 103,
+    "rating": 5,
+    "reviewDate": "2024-03-20T12:00:00",
+    "comment": "Excellent practice test with comprehensive explanations"
+  }
+]
+```
+
+### 3. Get Review by ID
+GET /api/tests/{testId}/reviews/{reviewId}
+
+### 4. Update Review
+PUT /api/tests/{testId}/reviews/{reviewId}
+```json
+{
+  "userId": 103,
+  "rating": 4,
+  "comment": "Updated review comment"
+}
+```
+
+### 5. Delete Review
+DELETE /api/tests/{testId}/reviews/{reviewId}
+
+## Notes
+1. All timestamps are in ISO-8601 format
+2. Pagination parameters:
+   - page: zero-based page number
+   - size: number of items per page
+3. Search parameter is optional and case-insensitive
+4. All IDs are integers
+5. User IDs are long integers
+6. Ratings are integers from 1 to 5
+7. Durations are in seconds
+8. Question types:
+   - Single Choice: requires exactly one selected option
+   - Multiple Choice: requires at least one selected option
+   - Fill in Blank: requires a written answer
+   - Part Instruction: no answer required 
