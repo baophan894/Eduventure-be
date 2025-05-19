@@ -13,36 +13,55 @@ import lombok.NoArgsConstructor;
 public class TestListDTO {
     private Integer id;
     private Integer typeId;
+    private String typeName;
     private String title;
     private String description;
     private String coverImg;
     private Integer views;
-    private Float ratings;
+    private Double ratings;
     private Integer reviewCount;
     private Integer duration;
-    private String difficulty;
+    private String testLevel;
+    private Integer testLevelId;
     private LocalDateTime lastUpdated;
     private String instructorName;
     private String instructorTitle;
+    private String instructorDescription;
+    private String instructorExperience;
+    private String instructorAvatar;
     private List<String> testFeatures;
     private List<String> testRequirements;
     private List<String> testTargetScores;
 
     public TestListDTO(Integer id, Integer typeId, String title, String description, String coverImg,
-            Integer views, Float ratings, Integer reviewCount, Integer duration, String difficulty,
-            LocalDateTime lastUpdated, String instructorName, String instructorTitle) {
+            Integer views, Integer duration, String testLevel, LocalDateTime lastUpdated,
+            String instructorName, String instructorTitle) {
         this.id = id;
         this.typeId = typeId;
         this.title = title;
         this.description = description;
         this.coverImg = coverImg;
         this.views = views;
-        this.ratings = ratings;
-        this.reviewCount = reviewCount;
         this.duration = duration;
-        this.difficulty = difficulty;
+        this.testLevel = testLevel;
         this.lastUpdated = lastUpdated;
         this.instructorName = instructorName;
         this.instructorTitle = instructorTitle;
+    }
+
+    public TestListDTO(Integer id, String title, String description, String coverImg,
+            Integer views, Integer duration, String testLevel, LocalDateTime lastUpdated,
+            String instructorName, String instructorTitle, String instructorAvatar) {
+        this.id = id;
+        this.title = title;
+        this.description = description;
+        this.coverImg = coverImg;
+        this.views = views;
+        this.duration = duration;
+        this.testLevel = testLevel;
+        this.lastUpdated = lastUpdated;
+        this.instructorName = instructorName;
+        this.instructorTitle = instructorTitle;
+        this.instructorAvatar = instructorAvatar;
     }
 }

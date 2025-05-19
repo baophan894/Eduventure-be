@@ -1,14 +1,19 @@
 package swp.group2.swpbe.exam.service.impl;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import swp.group2.swpbe.exam.dto.TestReviewDTO;
+import swp.group2.swpbe.exam.dto.TestReviewFilterDTO;
+import swp.group2.swpbe.exam.dto.TestReviewResponseDTO;
 import swp.group2.swpbe.exam.entities.Test;
 import swp.group2.swpbe.exam.entities.TestReview;
 import swp.group2.swpbe.exam.repository.TestRepository;
 import swp.group2.swpbe.exam.repository.TestReviewRepository;
 import swp.group2.swpbe.exam.service.TestReviewService;
+import swp.group2.swpbe.user.UserRepository;
+import swp.group2.swpbe.user.entities.User;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,93 +22,172 @@ import java.util.stream.Collectors;
 @Service
 public class TestReviewServiceImpl implements TestReviewService {
 
-    @Autowired
-    private TestReviewRepository testReviewRepository;
+        @Autowired
+        private TestReviewRepository testReviewRepository;
 
-    @Autowired
-    private TestRepository testRepository;
+        @Autowired
+        private TestRepository testRepository;
 
-    @Override
-    public List<TestReviewDTO> getReviewsByTestId(Integer testId) {
-        return testReviewRepository.findByTestId(testId)
-                .stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
+        @Autowired
+        private UserRepository userRepository;
 
-    @Override
-    public TestReviewDTO getReviewById(Integer testId, Integer reviewId) {
-        TestReview review = testReviewRepository.findById(reviewId)
-                .orElseThrow(() -> new EntityNotFoundException("Review not found"));
+        @Override
+        public TestReviewResponseDTO getReviewsByTestId(Integer testId, Pageable pageable, TestReviewFilterDTO filter) {
+                Test test = testRepository.findById(testId)
+                                .orElseThrow(() -> new RuntimeException("Test not found"));
 
-        if (!review.getTest().getId().equals(testId)) {
-            throw new EntityNotFoundException("Review not found for the specified test");
+                Page<TestReview> reviewPage = testReviewRepository.findByTestIdAndFilters(
+                                testId,
+                                filter.getRating(),
+                                filter.getUserId(),
+                                filter.getComment(),
+                                filter.getFromDate(),
+                                filter.getToDate(),
+                                pageable);
+
+                List<TestReviewDTO> reviewDTOs = reviewPage.getContent().stream()
+                                .map(this::convertToDTO)
+                                .collect(Collectors.toList());
+
+                // Get rating statistics with filters
+                long totalReviews = testReviewRepository.countByTestIdAndFilters(
+                                testId,
+                                filter.getRating(),
+                                filter.getUserId(),
+                                filter.getComment(),
+                                filter.getFromDate(),
+                                filter.getToDate());
+
+                Double averageRating = testReviewRepository.getAverageRatingByTestIdAndFilters(
+                                testId,
+                                filter.getRating(),
+                                filter.getUserId(),
+                                filter.getComment(),
+                                filter.getFromDate(),
+                                filter.getToDate());
+
+                long fiveStarCount = testReviewRepository.countByTestIdAndRatingAndFilters(
+                                testId, 5,
+                                filter.getUserId(),
+                                filter.getComment(),
+                                filter.getFromDate(),
+                                filter.getToDate());
+
+                long fourStarCount = testReviewRepository.countByTestIdAndRatingAndFilters(
+                                testId, 4,
+                                filter.getUserId(),
+                                filter.getComment(),
+                                filter.getFromDate(),
+                                filter.getToDate());
+
+                long threeStarCount = testReviewRepository.countByTestIdAndRatingAndFilters(
+                                testId, 3,
+                                filter.getUserId(),
+                                filter.getComment(),
+                                filter.getFromDate(),
+                                filter.getToDate());
+
+                long twoStarCount = testReviewRepository.countByTestIdAndRatingAndFilters(
+                                testId, 2,
+                                filter.getUserId(),
+                                filter.getComment(),
+                                filter.getFromDate(),
+                                filter.getToDate());
+
+                long oneStarCount = testReviewRepository.countByTestIdAndRatingAndFilters(
+                                testId, 1,
+                                filter.getUserId(),
+                                filter.getComment(),
+                                filter.getFromDate(),
+                                filter.getToDate());
+
+                return TestReviewResponseDTO.builder()
+                                .reviews(reviewDTOs)
+                                .currentPage(reviewPage.getNumber())
+                                .totalPages(reviewPage.getTotalPages())
+                                .totalItems(reviewPage.getTotalElements())
+                                .pageSize(reviewPage.getSize())
+                                .averageRating(averageRating != null ? averageRating : 0.0)
+                                .totalReviews(totalReviews)
+                                .fiveStarCount(fiveStarCount)
+                                .fourStarCount(fourStarCount)
+                                .threeStarCount(threeStarCount)
+                                .twoStarCount(twoStarCount)
+                                .oneStarCount(oneStarCount)
+                                .build();
         }
 
-        return convertToDTO(review);
-    }
+        @Override
+        public TestReviewDTO getReviewById(Integer testId, Integer reviewId) {
+                TestReview review = testReviewRepository.findById(reviewId)
+                                .orElseThrow(() -> new RuntimeException("Review not found"));
 
-    @Override
-    public TestReviewDTO createReview(Integer testId, TestReviewDTO reviewDTO) {
-        Test test = testRepository.findById(testId)
-                .orElseThrow(() -> new EntityNotFoundException("Test not found"));
+                if (!review.getTest().getId().equals(testId)) {
+                        throw new RuntimeException("Review does not belong to the specified test");
+                }
 
-        // Check if user already reviewed this test
-        if (testReviewRepository.findByTestId(testId).stream()
-                .anyMatch(review -> review.getUserId().equals(reviewDTO.getUserId()))) {
-            throw new DataIntegrityViolationException("User has already reviewed this test");
+                return convertToDTO(review);
         }
 
-        TestReview review = new TestReview();
-        review.setTest(test);
-        review.setUserId(reviewDTO.getUserId());
-        review.setRating(reviewDTO.getRating());
-        review.setComment(reviewDTO.getComment());
-        review.setReviewDate(LocalDateTime.now());
+        @Override
+        public TestReviewDTO createReview(Integer testId, TestReviewDTO reviewDTO) {
+                Test test = testRepository.findById(testId)
+                                .orElseThrow(() -> new RuntimeException("Test not found"));
 
-        try {
-            TestReview savedReview = testReviewRepository.save(review);
-            return convertToDTO(savedReview);
-        } catch (DataIntegrityViolationException e) {
-            throw new DataIntegrityViolationException("User has already reviewed this test");
-        }
-    }
+                TestReview review = new TestReview();
+                review.setTest(test);
+                review.setUserId(reviewDTO.getUserId());
+                review.setRating(reviewDTO.getRating());
+                review.setComment(reviewDTO.getComment());
+                review.setReviewDate(LocalDateTime.now());
 
-    @Override
-    public TestReviewDTO updateReview(Integer testId, Integer reviewId, TestReviewDTO reviewDTO) {
-        TestReview review = testReviewRepository.findById(reviewId)
-                .orElseThrow(() -> new EntityNotFoundException("Review not found"));
-
-        if (!review.getTest().getId().equals(testId)) {
-            throw new EntityNotFoundException("Review not found for the specified test");
+                TestReview savedReview = testReviewRepository.save(review);
+                return convertToDTO(savedReview);
         }
 
-        review.setRating(reviewDTO.getRating());
-        review.setComment(reviewDTO.getComment());
+        @Override
+        public TestReviewDTO updateReview(Integer testId, Integer reviewId, TestReviewDTO reviewDTO) {
+                TestReview review = testReviewRepository.findById(reviewId)
+                                .orElseThrow(() -> new RuntimeException("Review not found"));
 
-        TestReview updatedReview = testReviewRepository.save(review);
-        return convertToDTO(updatedReview);
-    }
+                if (!review.getTest().getId().equals(testId)) {
+                        throw new RuntimeException("Review does not belong to the specified test");
+                }
 
-    @Override
-    public void deleteReview(Integer testId, Integer reviewId) {
-        TestReview review = testReviewRepository.findById(reviewId)
-                .orElseThrow(() -> new EntityNotFoundException("Review not found"));
+                review.setRating(reviewDTO.getRating());
+                review.setComment(reviewDTO.getComment());
 
-        if (!review.getTest().getId().equals(testId)) {
-            throw new EntityNotFoundException("Review not found for the specified test");
+                TestReview updatedReview = testReviewRepository.save(review);
+                return convertToDTO(updatedReview);
         }
 
-        testReviewRepository.delete(review);
-    }
+        @Override
+        public void deleteReview(Integer testId, Integer reviewId) {
+                TestReview review = testReviewRepository.findById(reviewId)
+                                .orElseThrow(() -> new RuntimeException("Review not found"));
 
-    private TestReviewDTO convertToDTO(TestReview review) {
-        return new TestReviewDTO(
-                review.getId(),
-                review.getTest().getId(),
-                review.getUserId(),
-                review.getRating(),
-                review.getReviewDate(),
-                review.getComment());
-    }
+                if (!review.getTest().getId().equals(testId)) {
+                        throw new RuntimeException("Review does not belong to the specified test");
+                }
+
+                testReviewRepository.delete(review);
+        }
+
+        private TestReviewDTO convertToDTO(TestReview review) {
+                User user = userRepository.findById(review.getUserId().intValue());
+                String userFullName = user != null ? user.getFullName() : null;
+                String userAvatarUrl = user != null ? user.getAvatarUrl() : null;
+
+                TestReviewDTO dto = new TestReviewDTO();
+                dto.setId(review.getId());
+                dto.setTestId(review.getTest().getId());
+                dto.setUserId(review.getUserId());
+                dto.setRating(review.getRating());
+                dto.setComment(review.getComment());
+                dto.setReviewDate(review.getReviewDate());
+                dto.setUserFullName(userFullName);
+                dto.setUserAvatarUrl(userAvatarUrl);
+
+                return dto;
+        }
 }

@@ -33,9 +33,6 @@ public class Question {
     @Column(name = "answer_instruction")
     private String answerInstruction;
 
-    @Column(name = "audio_url")
-    private String audioUrl;
-
     @Column(name = "image_url")
     private String imageUrl;
 
@@ -44,6 +41,9 @@ public class Question {
 
     @Column(name = "correct_answer")
     private String correctAnswer;
+
+    @Column(name = "question_order", nullable = false)
+    private Integer order;
 
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuestionOption> questionOptions;

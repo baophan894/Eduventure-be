@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "submitted_answers")
@@ -28,4 +30,9 @@ public class SubmittedAnswer {
 
     @Column(name = "is_correct", nullable = false)
     private Boolean isCorrect;
+
+    @ElementCollection
+    @CollectionTable(name = "submitted_answer_options", joinColumns = @JoinColumn(name = "answer_id"))
+    @Column(name = "option_id")
+    private List<String> selectedOptionIds = new ArrayList<>();
 }

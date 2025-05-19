@@ -10,5 +10,7 @@ public class TestPartDTO {
     private String icon;
     private Integer duration;
     private String description;
+    private Integer order;
+    private String audioUrl;
     private List<QuestionDTO> questions;
 }

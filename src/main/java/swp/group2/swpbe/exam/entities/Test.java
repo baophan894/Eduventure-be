@@ -5,7 +5,6 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,29 +26,18 @@ public class Test {
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "cover_img")
     private String coverImg;
 
     @Column(name = "views")
-    private Integer views = 0;
+    private Integer views;
 
-    @Column(name = "ratings")
-    private Float ratings = 0.0f;
-
-    @Column(name = "review_count")
-    private Integer reviewCount = 0;
-
-    @Column(name = "duration", nullable = false)
-    private Integer duration;
-
-    @Column(name = "difficulty")
-    private String difficulty;
-
-    @Column(name = "last_updated")
-    private LocalDateTime lastUpdated;
+    @ManyToOne
+    @JoinColumn(name = "test_level_id")
+    private TestLevel testLevel;
 
     @Column(name = "instructor_name")
     private String instructorName;
@@ -60,8 +48,11 @@ public class Test {
     @Column(name = "instructor_experience")
     private String instructorExperience;
 
-    @Column(name = "instructor_description")
+    @Column(name = "instructor_description", columnDefinition = "TEXT")
     private String instructorDescription;
+
+    @Column(name = "instructor_avatar")
+    private String instructorAvatar;
 
     @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TestPart> testParts = new ArrayList<>();

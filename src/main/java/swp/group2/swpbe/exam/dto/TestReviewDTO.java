@@ -24,7 +24,10 @@ public class TestReviewDTO {
     @Max(value = 5, message = "Rating must be at most 5")
     private Integer rating;
 
+    private String comment;
     private LocalDateTime reviewDate;
 
-    private String comment;
+    // User information
+    private String userFullName;
+    private String userAvatarUrl;
 }

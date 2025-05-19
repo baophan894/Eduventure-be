@@ -50,10 +50,10 @@ public class CourseController {
         if (authService.isExpert(userId) == false) {
             throw new ApiRequestException("FORBIDDEN", HttpStatus.FORBIDDEN);
         }
-        //upload len cloudinary
+        // upload len cloudinary
         Map data = this.cloudinaryService.upload(banner);
         String url = (String) data.get("url");
-        
+
         Course course = courseService.createCourse(userId, price, description, name, url, topic_id);
         for (int i = 0; i < files.length; i++) {
             String fileName = files[i].getOriginalFilename();

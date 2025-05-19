@@ -29,9 +29,14 @@ import swp.group2.swpbe.exam.entities.Test;
 import swp.group2.swpbe.exam.entities.TestFeature;
 import swp.group2.swpbe.exam.entities.TestPart;
 import swp.group2.swpbe.exam.entities.TestRequirement;
+import swp.group2.swpbe.exam.entities.TestSubmission;
 import swp.group2.swpbe.exam.entities.TestTargetScore;
 import swp.group2.swpbe.exam.entities.TestType;
+import swp.group2.swpbe.exam.entities.TestLevel;
 import swp.group2.swpbe.exam.repository.TestRepository;
+import swp.group2.swpbe.exam.repository.TestReviewRepository;
+import swp.group2.swpbe.exam.repository.TestSubmissionRepository;
+import swp.group2.swpbe.exam.repository.TestLevelRepository;
 import swp.group2.swpbe.exam.service.TestService;
 
 @Slf4j
@@ -40,6 +45,15 @@ public class TestServiceImpl implements TestService {
 
     @Autowired
     private TestRepository testRepository;
+
+    @Autowired
+    private TestReviewRepository testReviewRepository;
+
+    @Autowired
+    private TestSubmissionRepository testSubmissionRepository;
+
+    @Autowired
+    private TestLevelRepository testLevelRepository;
 
     @Override
     @Transactional
@@ -55,6 +69,9 @@ public class TestServiceImpl implements TestService {
     public TestDTO getTest(Integer id) {
         Test test = testRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Test not found with id: " + id));
+        // Increment views
+        test.setViews(test.getViews() != null ? test.getViews() + 1 : 1);
+        testRepository.save(test);
         return convertToDTO(test);
     }
 
@@ -69,15 +86,23 @@ public class TestServiceImpl implements TestService {
         test.setDescription(testDTO.getDescription());
         test.setCoverImg(testDTO.getCoverImg());
         test.setViews(testDTO.getViews() != null ? testDTO.getViews() : 0);
-        test.setRatings(testDTO.getRatings() != null ? testDTO.getRatings() : 0.0f);
-        test.setReviewCount(testDTO.getReviewCount() != null ? testDTO.getReviewCount() : 0);
-        test.setDuration(testDTO.getDuration());
-        test.setDifficulty(testDTO.getDifficulty());
-        test.setLastUpdated(LocalDateTime.now());
+
+        // Handle test level
+        if (testDTO.getTestLevel() != null) {
+            TestLevel testLevel = testLevelRepository.findByName(testDTO.getTestLevel())
+                    .orElseGet(() -> {
+                        TestLevel newLevel = new TestLevel();
+                        newLevel.setName(testDTO.getTestLevel());
+                        return testLevelRepository.save(newLevel);
+                    });
+            test.setTestLevel(testLevel);
+        }
+
         test.setInstructorName(testDTO.getInstructorName());
         test.setInstructorTitle(testDTO.getInstructorTitle());
         test.setInstructorExperience(testDTO.getInstructorExperience());
         test.setInstructorDescription(testDTO.getInstructorDescription());
+        test.setInstructorAvatar(testDTO.getInstructorAvatar());
 
         // Set test type
         TestType testType = new TestType();
@@ -187,6 +212,8 @@ public class TestServiceImpl implements TestService {
                 part.setIcon(partDTO.getIcon());
                 part.setDuration(partDTO.getDuration());
                 part.setDescription(partDTO.getDescription());
+                part.setOrder(partDTO.getOrder());
+                part.setAudioUrl(partDTO.getAudioUrl());
 
                 // Initialize questions list if null
                 if (part.getQuestions() == null) {
@@ -216,10 +243,10 @@ public class TestServiceImpl implements TestService {
                         question.setTitle(questionDTO.getTitle());
                         question.setQuestionInstruction(questionDTO.getQuestionInstruction());
                         question.setAnswerInstruction(questionDTO.getAnswerInstruction());
-                        question.setAudioUrl(questionDTO.getAudioUrl());
                         question.setImageUrl(questionDTO.getImageUrl());
                         question.setReadingPassage(questionDTO.getReadingPassage());
                         question.setCorrectAnswer(questionDTO.getCorrectAnswer());
+                        question.setOrder(questionDTO.getOrder());
 
                         // Set question type
                         QuestionType questionType = new QuestionType();
@@ -282,57 +309,81 @@ public class TestServiceImpl implements TestService {
     @Override
     @Transactional
     public void deleteTest(Integer id) {
-        if (!testRepository.existsById(id)) {
-            throw new EntityNotFoundException("Test not found with id: " + id);
+        Test test = testRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Test not found with id: " + id));
+
+        // First delete all test submissions and their related data
+        List<TestSubmission> submissions = testSubmissionRepository.findByTestId(id);
+        for (TestSubmission submission : submissions) {
+            // Clear submitted answers first
+            submission.getSubmittedAnswers().clear();
+            // Clear submission parts
+            submission.getSubmissionParts().clear();
+            // Delete the submission
+            testSubmissionRepository.delete(submission);
         }
-        testRepository.deleteById(id);
+
+        // Now we can safely delete the test
+        testRepository.delete(test);
     }
 
     @Override
-    public TestResponseDTO getAllTests(int page, int size, String search) {
+    public TestResponseDTO getAllTests(int page, int size, String search, Integer testLevelId, Integer typeId,
+            Integer languageId) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Test> testPage;
 
         if (search != null && !search.trim().isEmpty()) {
-            testPage = testRepository.findByTitleContainingIgnoreCase(search, pageable);
+            if (testLevelId != null && typeId != null && languageId != null) {
+                testPage = testRepository.findByTitleContainingIgnoreCaseAndTestLevelIdAndTestLevelLanguageIdAndTypeId(
+                        search, testLevelId, languageId, typeId, pageable);
+            } else if (testLevelId != null && languageId != null) {
+                testPage = testRepository.findByTitleContainingIgnoreCaseAndTestLevelIdAndTestLevelLanguageId(
+                        search, testLevelId, languageId, pageable);
+            } else if (typeId != null && languageId != null) {
+                testPage = testRepository.findByTitleContainingIgnoreCaseAndTestLevelLanguageIdAndTypeId(
+                        search, languageId, typeId, pageable);
+            } else if (testLevelId != null && typeId != null) {
+                testPage = testRepository.findByTitleContainingIgnoreCaseAndTestLevelIdAndTypeId(
+                        search, testLevelId, typeId, pageable);
+            } else if (languageId != null) {
+                testPage = testRepository.findByTitleContainingIgnoreCaseAndTestLevelLanguageId(
+                        search, languageId, pageable);
+            } else if (testLevelId != null) {
+                testPage = testRepository.findByTitleContainingIgnoreCaseAndTestLevelId(
+                        search, testLevelId, pageable);
+            } else if (typeId != null) {
+                testPage = testRepository.findByTitleContainingIgnoreCaseAndTypeId(
+                        search, typeId, pageable);
+            } else {
+                testPage = testRepository.findByTitleContainingIgnoreCase(search, pageable);
+            }
         } else {
-            testPage = testRepository.findAll(pageable);
+            if (testLevelId != null && typeId != null && languageId != null) {
+                testPage = testRepository.findByTestLevelIdAndTestLevelLanguageIdAndTypeId(
+                        testLevelId, languageId, typeId, pageable);
+            } else if (testLevelId != null && languageId != null) {
+                testPage = testRepository.findByTestLevelIdAndTestLevelLanguageId(
+                        testLevelId, languageId, pageable);
+            } else if (typeId != null && languageId != null) {
+                testPage = testRepository.findByTestLevelLanguageIdAndTypeId(
+                        languageId, typeId, pageable);
+            } else if (testLevelId != null && typeId != null) {
+                testPage = testRepository.findByTestLevelIdAndTypeId(
+                        testLevelId, typeId, pageable);
+            } else if (languageId != null) {
+                testPage = testRepository.findByTestLevelLanguageId(languageId, pageable);
+            } else if (testLevelId != null) {
+                testPage = testRepository.findByTestLevelId(testLevelId, pageable);
+            } else if (typeId != null) {
+                testPage = testRepository.findByTypeId(typeId, pageable);
+            } else {
+                testPage = testRepository.findAll(pageable);
+            }
         }
 
         List<TestListDTO> testDTOs = testPage.getContent().stream()
-                .map(test -> {
-                    TestListDTO dto = new TestListDTO(
-                            test.getId(),
-                            test.getType().getId(),
-                            test.getTitle(),
-                            test.getDescription(),
-                            test.getCoverImg(),
-                            test.getViews(),
-                            test.getRatings(),
-                            test.getReviewCount(),
-                            test.getDuration(),
-                            test.getDifficulty(),
-                            test.getLastUpdated(),
-                            test.getInstructorName(),
-                            test.getInstructorTitle());
-
-                    // Add test features
-                    dto.setTestFeatures(test.getTestFeatures().stream()
-                            .map(TestFeature::getFeature)
-                            .collect(Collectors.toList()));
-
-                    // Add test requirements
-                    dto.setTestRequirements(test.getTestRequirements().stream()
-                            .map(TestRequirement::getRequirement)
-                            .collect(Collectors.toList()));
-
-                    // Add test target scores
-                    dto.setTestTargetScores(test.getTestTargetScores().stream()
-                            .map(score -> score.getScore())
-                            .collect(Collectors.toList()));
-
-                    return dto;
-                })
+                .map(this::convertToTestListDTO)
                 .collect(Collectors.toList());
 
         return new TestResponseDTO(
@@ -343,20 +394,83 @@ public class TestServiceImpl implements TestService {
                 testPage.getSize());
     }
 
+    @Override
+    public Page<TestDTO> searchTests(String search, Integer testLevelId, Integer typeId, Integer languageId,
+            Pageable pageable) {
+        Page<Test> tests;
+        if (search != null && !search.trim().isEmpty()) {
+            if (testLevelId != null && typeId != null && languageId != null) {
+                tests = testRepository.findByTitleContainingIgnoreCaseAndTestLevelIdAndTestLevelLanguageIdAndTypeId(
+                        search, testLevelId, languageId, typeId, pageable);
+            } else if (testLevelId != null && languageId != null) {
+                tests = testRepository.findByTitleContainingIgnoreCaseAndTestLevelIdAndTestLevelLanguageId(
+                        search, testLevelId, languageId, pageable);
+            } else if (typeId != null && languageId != null) {
+                tests = testRepository.findByTitleContainingIgnoreCaseAndTestLevelLanguageIdAndTypeId(
+                        search, languageId, typeId, pageable);
+            } else if (testLevelId != null && typeId != null) {
+                tests = testRepository.findByTitleContainingIgnoreCaseAndTestLevelIdAndTypeId(
+                        search, testLevelId, typeId, pageable);
+            } else if (languageId != null) {
+                tests = testRepository.findByTitleContainingIgnoreCaseAndTestLevelLanguageId(
+                        search, languageId, pageable);
+            } else if (testLevelId != null) {
+                tests = testRepository.findByTitleContainingIgnoreCaseAndTestLevelId(
+                        search, testLevelId, pageable);
+            } else if (typeId != null) {
+                tests = testRepository.findByTitleContainingIgnoreCaseAndTypeId(
+                        search, typeId, pageable);
+            } else {
+                tests = testRepository.findByTitleContainingIgnoreCase(search, pageable);
+            }
+        } else {
+            if (testLevelId != null && typeId != null && languageId != null) {
+                tests = testRepository.findByTestLevelIdAndTestLevelLanguageIdAndTypeId(
+                        testLevelId, languageId, typeId, pageable);
+            } else if (testLevelId != null && languageId != null) {
+                tests = testRepository.findByTestLevelIdAndTestLevelLanguageId(
+                        testLevelId, languageId, pageable);
+            } else if (typeId != null && languageId != null) {
+                tests = testRepository.findByTestLevelLanguageIdAndTypeId(
+                        languageId, typeId, pageable);
+            } else if (testLevelId != null && typeId != null) {
+                tests = testRepository.findByTestLevelIdAndTypeId(
+                        testLevelId, typeId, pageable);
+            } else if (languageId != null) {
+                tests = testRepository.findByTestLevelLanguageId(languageId, pageable);
+            } else if (testLevelId != null) {
+                tests = testRepository.findByTestLevelId(testLevelId, pageable);
+            } else if (typeId != null) {
+                tests = testRepository.findByTypeId(typeId, pageable);
+            } else {
+                tests = testRepository.findAll(pageable);
+            }
+        }
+        return tests.map(this::convertToDTO);
+    }
+
     private void updateTestFromDTO(Test test, TestDTO dto) {
         test.setTitle(dto.getTitle());
         test.setDescription(dto.getDescription());
         test.setCoverImg(dto.getCoverImg());
-        test.setViews(dto.getViews() != null ? dto.getViews() : 0);
-        test.setRatings(dto.getRatings() != null ? dto.getRatings() : 0.0f);
-        test.setReviewCount(dto.getReviewCount() != null ? dto.getReviewCount() : 0);
-        test.setDuration(dto.getDuration());
-        test.setDifficulty(dto.getDifficulty());
-        test.setLastUpdated(LocalDateTime.now());
+        test.setViews(dto.getViews());
+
+        // Handle test level
+        if (dto.getTestLevel() != null) {
+            TestLevel testLevel = testLevelRepository.findByName(dto.getTestLevel())
+                    .orElseGet(() -> {
+                        TestLevel newLevel = new TestLevel();
+                        newLevel.setName(dto.getTestLevel());
+                        return testLevelRepository.save(newLevel);
+                    });
+            test.setTestLevel(testLevel);
+        }
+
         test.setInstructorName(dto.getInstructorName());
         test.setInstructorTitle(dto.getInstructorTitle());
         test.setInstructorExperience(dto.getInstructorExperience());
         test.setInstructorDescription(dto.getInstructorDescription());
+        test.setInstructorAvatar(dto.getInstructorAvatar());
 
         // Set test type
         TestType testType = new TestType();
@@ -466,6 +580,8 @@ public class TestServiceImpl implements TestService {
                 part.setIcon(partDTO.getIcon());
                 part.setDuration(partDTO.getDuration());
                 part.setDescription(partDTO.getDescription());
+                part.setOrder(partDTO.getOrder());
+                part.setAudioUrl(partDTO.getAudioUrl());
 
                 // Initialize questions list if null
                 if (part.getQuestions() == null) {
@@ -495,10 +611,10 @@ public class TestServiceImpl implements TestService {
                         question.setTitle(questionDTO.getTitle());
                         question.setQuestionInstruction(questionDTO.getQuestionInstruction());
                         question.setAnswerInstruction(questionDTO.getAnswerInstruction());
-                        question.setAudioUrl(questionDTO.getAudioUrl());
                         question.setImageUrl(questionDTO.getImageUrl());
                         question.setReadingPassage(questionDTO.getReadingPassage());
                         question.setCorrectAnswer(questionDTO.getCorrectAnswer());
+                        question.setOrder(questionDTO.getOrder());
 
                         // Set question type
                         QuestionType questionType = new QuestionType();
@@ -558,20 +674,31 @@ public class TestServiceImpl implements TestService {
     private TestDTO convertToDTO(Test test) {
         TestDTO dto = new TestDTO();
         dto.setId(test.getId());
+        dto.setTypeId(test.getType().getId());
+        dto.setTypeName(test.getType().getName());
         dto.setTitle(test.getTitle());
         dto.setDescription(test.getDescription());
         dto.setCoverImg(test.getCoverImg());
         dto.setViews(test.getViews());
-        dto.setRatings(test.getRatings());
-        dto.setReviewCount(test.getReviewCount());
-        dto.setDuration(test.getDuration());
-        dto.setDifficulty(test.getDifficulty());
-        dto.setLastUpdated(test.getLastUpdated());
+        dto.setTestLevel(test.getTestLevel() != null ? test.getTestLevel().getName() : null);
+        dto.setTestLevelId(test.getTestLevel() != null ? test.getTestLevel().getId() : null);
         dto.setInstructorName(test.getInstructorName());
         dto.setInstructorTitle(test.getInstructorTitle());
         dto.setInstructorExperience(test.getInstructorExperience());
         dto.setInstructorDescription(test.getInstructorDescription());
-        dto.setTypeId(test.getType().getId());
+        dto.setInstructorAvatar(test.getInstructorAvatar());
+
+        // Calculate total duration from test parts
+        int totalDuration = test.getTestParts().stream()
+                .mapToInt(TestPart::getDuration)
+                .sum();
+        dto.setDuration(totalDuration);
+
+        // Calculate and set ratings and review count
+        Double averageRating = testReviewRepository.getAverageRatingByTestId(test.getId());
+        long reviewCount = testReviewRepository.countByTestId(test.getId());
+        dto.setRatings(averageRating != null ? Math.round(averageRating * 10.0) / 10.0 : 0.0);
+        dto.setReviewCount((int) reviewCount);
 
         // Convert test features
         dto.setTestFeatures(test.getTestFeatures().stream()
@@ -585,52 +712,104 @@ public class TestServiceImpl implements TestService {
 
         // Convert test target scores
         dto.setTestTargetScores(test.getTestTargetScores().stream()
-                .map(score -> score.getScore())
+                .map(TestTargetScore::getScore)
                 .collect(Collectors.toList()));
 
         // Convert test parts
         dto.setTestParts(test.getTestParts().stream()
-                .map(part -> {
-                    TestPartDTO partDTO = new TestPartDTO();
-                    partDTO.setId(part.getId());
-                    partDTO.setName(part.getName());
-                    partDTO.setIcon(part.getIcon());
-                    partDTO.setDuration(part.getDuration());
-                    partDTO.setDescription(part.getDescription());
-
-                    // Convert questions
-                    partDTO.setQuestions(part.getQuestions().stream()
-                            .map(question -> {
-                                QuestionDTO questionDTO = new QuestionDTO();
-                                questionDTO.setId(question.getId());
-                                questionDTO.setTitle(question.getTitle());
-                                questionDTO.setQuestionInstruction(question.getQuestionInstruction());
-                                questionDTO.setAnswerInstruction(question.getAnswerInstruction());
-                                questionDTO.setAudioUrl(question.getAudioUrl());
-                                questionDTO.setImageUrl(question.getImageUrl());
-                                questionDTO.setReadingPassage(question.getReadingPassage());
-                                questionDTO.setCorrectAnswer(question.getCorrectAnswer());
-                                questionDTO.setTypeId(question.getType().getId());
-
-                                // Convert question options
-                                questionDTO.setQuestionOptions(question.getQuestionOptions().stream()
-                                        .map(option -> {
-                                            QuestionOptionDTO optionDTO = new QuestionOptionDTO();
-                                            optionDTO.setId(option.getId());
-                                            optionDTO.setOptionId(option.getOptionId());
-                                            optionDTO.setText(option.getText());
-                                            return optionDTO;
-                                        })
-                                        .collect(Collectors.toList()));
-
-                                return questionDTO;
-                            })
-                            .collect(Collectors.toList()));
-
-                    return partDTO;
-                })
+                .map(this::convertToTestPartDTO)
                 .collect(Collectors.toList()));
 
         return dto;
+    }
+
+    private TestListDTO convertToTestListDTO(Test test) {
+        TestListDTO dto = new TestListDTO();
+        dto.setId(test.getId());
+        dto.setTypeId(test.getType().getId());
+        dto.setTypeName(test.getType().getName());
+        dto.setTitle(test.getTitle());
+        dto.setDescription(test.getDescription());
+        dto.setCoverImg(test.getCoverImg());
+        dto.setViews(test.getViews());
+        dto.setTestLevel(test.getTestLevel() != null ? test.getTestLevel().getName() : null);
+        dto.setTestLevelId(test.getTestLevel() != null ? test.getTestLevel().getId() : null);
+        dto.setInstructorName(test.getInstructorName());
+        dto.setInstructorTitle(test.getInstructorTitle());
+        dto.setInstructorExperience(test.getInstructorExperience());
+        dto.setInstructorDescription(test.getInstructorDescription());
+        dto.setInstructorAvatar(test.getInstructorAvatar());
+
+        // Calculate total duration from test parts
+        int totalDuration = test.getTestParts().stream()
+                .mapToInt(TestPart::getDuration)
+                .sum();
+        dto.setDuration(totalDuration);
+
+        // Calculate and set ratings and review count
+        Double averageRating = testReviewRepository.getAverageRatingByTestId(test.getId());
+        long reviewCount = testReviewRepository.countByTestId(test.getId());
+        dto.setRatings(averageRating != null ? Math.round(averageRating * 10.0) / 10.0 : 0.0);
+        dto.setReviewCount((int) reviewCount);
+
+        // Convert test features
+        dto.setTestFeatures(test.getTestFeatures().stream()
+                .map(TestFeature::getFeature)
+                .collect(Collectors.toList()));
+
+        // Convert test requirements
+        dto.setTestRequirements(test.getTestRequirements().stream()
+                .map(TestRequirement::getRequirement)
+                .collect(Collectors.toList()));
+
+        // Convert test target scores
+        dto.setTestTargetScores(test.getTestTargetScores().stream()
+                .map(TestTargetScore::getScore)
+                .collect(Collectors.toList()));
+
+        return dto;
+    }
+
+    private TestPartDTO convertToTestPartDTO(TestPart part) {
+        TestPartDTO partDTO = new TestPartDTO();
+        partDTO.setId(part.getId());
+        partDTO.setName(part.getName());
+        partDTO.setIcon(part.getIcon());
+        partDTO.setDuration(part.getDuration());
+        partDTO.setDescription(part.getDescription());
+        partDTO.setOrder(part.getOrder());
+        partDTO.setAudioUrl(part.getAudioUrl());
+
+        // Convert questions
+        partDTO.setQuestions(part.getQuestions().stream()
+                .map(question -> {
+                    QuestionDTO questionDTO = new QuestionDTO();
+                    questionDTO.setId(question.getId());
+                    questionDTO.setTitle(question.getTitle());
+                    questionDTO.setQuestionInstruction(question.getQuestionInstruction());
+                    questionDTO.setAnswerInstruction(question.getAnswerInstruction());
+                    questionDTO.setImageUrl(question.getImageUrl());
+                    questionDTO.setReadingPassage(question.getReadingPassage());
+                    questionDTO.setCorrectAnswer(question.getCorrectAnswer());
+                    questionDTO.setOrder(question.getOrder());
+                    questionDTO.setTypeId(question.getType().getId());
+                    questionDTO.setTypeName(question.getType().getName());
+
+                    // Convert question options
+                    questionDTO.setQuestionOptions(question.getQuestionOptions().stream()
+                            .map(option -> {
+                                QuestionOptionDTO optionDTO = new QuestionOptionDTO();
+                                optionDTO.setId(option.getId());
+                                optionDTO.setOptionId(option.getOptionId());
+                                optionDTO.setText(option.getText());
+                                return optionDTO;
+                            })
+                            .collect(Collectors.toList()));
+
+                    return questionDTO;
+                })
+                .collect(Collectors.toList()));
+
+        return partDTO;
     }
 }

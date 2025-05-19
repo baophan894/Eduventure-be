@@ -28,9 +28,9 @@ public class TestReview {
     @Column(name = "rating", nullable = false)
     private Integer rating;
 
+    @Column(name = "comment", columnDefinition = "TEXT")
+    private String comment;
+
     @Column(name = "review_date", nullable = false)
     private LocalDateTime reviewDate;
-
-    @Column(name = "comment")
-    private String comment;
 }

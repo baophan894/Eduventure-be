@@ -15,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import swp.group2.swpbe.exam.dto.QuestionOptionDTO;
 import swp.group2.swpbe.exam.dto.SelectedOptionDTO;
 import swp.group2.swpbe.exam.dto.SubmittedAnswerRequestDTO;
 import swp.group2.swpbe.exam.dto.SubmittedAnswerResponseDTO;
@@ -48,7 +49,7 @@ public class TestSubmissionServiceImpl implements TestSubmissionService {
 
     @Override
     @Transactional
-    public TestSubmissionResponseDTO createSubmission(TestSubmissionRequestDTO requestDTO) {
+    public TestSubmissionResponseDTO createSubmission(TestSubmissionRequestDTO requestDTO, Long userId) {
         // Validate test exists
         Test test = testRepository.findById(requestDTO.getTestId())
                 .orElseThrow(
@@ -59,14 +60,9 @@ public class TestSubmissionServiceImpl implements TestSubmissionService {
             requestDTO.setSubmittedAt(LocalDateTime.now());
         }
 
-        // Validate user ID
-        if (requestDTO.getUserId() == null) {
-            throw new TestSubmissionException("User ID is required");
-        }
-
-        // Validate submitted answers
-        if (requestDTO.getSubmittedAnswers() == null || requestDTO.getSubmittedAnswers().isEmpty()) {
-            throw new TestSubmissionException("At least one answer must be submitted");
+        // Validate time spent
+        if (requestDTO.getTimeSpent() == null || requestDTO.getTimeSpent() < 0) {
+            throw new TestSubmissionException("Time spent must be a positive number");
         }
 
         // Get questions from selected test parts
@@ -101,68 +97,84 @@ public class TestSubmissionServiceImpl implements TestSubmissionService {
             }
         }
 
-        TestSubmission submission = new TestSubmission();
-        submission.setTest(test);
-        submission.setUserId(requestDTO.getUserId());
-        submission.setSubmittedAt(requestDTO.getSubmittedAt());
-        submission.setStatus("SUBMITTED");
+        // Create a temporary submission object for conversion
+        TestSubmission tempSubmission = new TestSubmission();
+        tempSubmission.setTest(test);
+        tempSubmission.setUserId(userId);
+        tempSubmission.setSubmittedAt(requestDTO.getSubmittedAt());
+        tempSubmission.setStatus("EVALUATED");
+        tempSubmission.setTimeSpent(requestDTO.getTimeSpent());
 
         // Add selected parts to submission
         for (TestPart part : selectedParts) {
             TestSubmissionPart submissionPart = new TestSubmissionPart();
             submissionPart.setPart(part);
-            submission.addSubmissionPart(submissionPart);
+            tempSubmission.addSubmissionPart(submissionPart);
         }
 
-        // Process each submitted answer
-        for (SubmittedAnswerRequestDTO answerDTO : requestDTO.getSubmittedAnswers()) {
-            // Validate question exists and belongs to the test
-            Question question = questionRepository.findById(answerDTO.getQuestionId())
-                    .orElseThrow(() -> new TestSubmissionException(
-                            "Question with ID " + answerDTO.getQuestionId() + " not found"));
+        // Process submitted answers if any
+        if (requestDTO.getSubmittedAnswers() != null && !requestDTO.getSubmittedAnswers().isEmpty()) {
+            for (SubmittedAnswerRequestDTO answerDTO : requestDTO.getSubmittedAnswers()) {
+                // Validate question exists and belongs to the test
+                Question question = questionRepository.findById(answerDTO.getQuestionId())
+                        .orElseThrow(() -> new TestSubmissionException(
+                                "Question with ID " + answerDTO.getQuestionId() + " not found"));
 
-            if (!testQuestions.contains(question)) {
-                throw new TestSubmissionException(
-                        "Question with ID " + answerDTO.getQuestionId()
-                                + " does not belong to the selected test parts");
+                if (!testQuestions.contains(question)) {
+                    throw new TestSubmissionException(
+                            "Question with ID " + answerDTO.getQuestionId()
+                                    + " does not belong to the selected test parts");
+                }
+
+                // Skip part instruction questions
+                if (question.getType().getName().equals("Part Instruction")) {
+                    continue;
+                }
+
+                // Validate answer based on question type
+                validateAnswerForQuestionType(question, answerDTO);
+
+                SubmittedAnswer answer = new SubmittedAnswer();
+                answer.setQuestion(question);
+                answer.setWrittenAnswer(answerDTO.getWrittenAnswer());
+                if (answerDTO.getSelectedOptions() != null) {
+                    answer.setSelectedOptionIds(answerDTO.getSelectedOptions().stream()
+                            .map(SelectedOptionDTO::getOptionId)
+                            .collect(Collectors.toList()));
+                }
+
+                // Calculate if the answer is correct based on question type
+                boolean isCorrect = calculateAnswerCorrectness(question, answerDTO);
+                answer.setIsCorrect(isCorrect);
+
+                tempSubmission.addSubmittedAnswer(answer);
             }
-
-            // Skip part instruction questions
-            if (question.getType().getName().equals("Part Instruction")) {
-                continue;
-            }
-
-            // Validate answer based on question type
-            validateAnswerForQuestionType(question, answerDTO);
-
-            SubmittedAnswer answer = new SubmittedAnswer();
-            answer.setQuestion(question);
-            answer.setWrittenAnswer(answerDTO.getWrittenAnswer());
-
-            // Calculate if the answer is correct based on question type
-            boolean isCorrect = calculateAnswerCorrectness(question, answerDTO);
-            answer.setIsCorrect(isCorrect);
-
-            submission.addSubmittedAnswer(answer);
         }
 
+        // Save to database
         try {
-            TestSubmission savedSubmission = testSubmissionRepository.save(submission);
-            return convertToResponseDTO(savedSubmission);
+            TestSubmission savedSubmission = testSubmissionRepository.save(tempSubmission);
+            return convertToDetailedResponseDTO(savedSubmission);
         } catch (Exception e) {
             throw new TestSubmissionException("Failed to save test submission", e);
         }
     }
 
     @Override
-    public TestSubmissionResponseDTO getSubmissionById(Integer id) {
+    public TestSubmissionResponseDTO getSubmissionById(Integer id, Long userId) {
         if (id == null) {
             throw new TestSubmissionException("Submission ID cannot be null");
         }
 
         TestSubmission submission = testSubmissionRepository.findById(id)
                 .orElseThrow(() -> new TestSubmissionException("Submission with ID " + id + " not found"));
-        return convertToResponseDTO(submission);
+
+        // Check if the submission belongs to the user
+        if (!submission.getUserId().equals(userId)) {
+            throw new TestSubmissionException("You don't have permission to view this submission");
+        }
+
+        return convertToDetailedResponseDTO(submission);
     }
 
     @Override
@@ -173,14 +185,10 @@ public class TestSubmissionServiceImpl implements TestSubmissionService {
 
         try {
             Page<TestSubmission> submissions;
-            if (userId != null && testId != null) {
+            if (testId != null) {
                 submissions = testSubmissionRepository.findByUserIdAndTestId(userId, testId, pageable);
-            } else if (userId != null) {
-                submissions = testSubmissionRepository.findByUserId(userId, pageable);
-            } else if (testId != null) {
-                submissions = testSubmissionRepository.findByTestId(testId, pageable);
             } else {
-                submissions = testSubmissionRepository.findAll(pageable);
+                submissions = testSubmissionRepository.findByUserId(userId, pageable);
             }
             return submissions.map(this::convertToResponseDTO);
         } catch (Exception e) {
@@ -190,13 +198,18 @@ public class TestSubmissionServiceImpl implements TestSubmissionService {
 
     @Override
     @Transactional
-    public void deleteSubmission(Integer id) {
+    public void deleteSubmission(Integer id, Long userId) {
         if (id == null) {
             throw new TestSubmissionException("Submission ID cannot be null");
         }
 
         TestSubmission submission = testSubmissionRepository.findById(id)
                 .orElseThrow(() -> new TestSubmissionException("Submission with ID " + id + " not found"));
+
+        // Check if the submission belongs to the user
+        if (!submission.getUserId().equals(userId)) {
+            throw new TestSubmissionException("You don't have permission to delete this submission");
+        }
 
         try {
             // Clear the submission parts collection first
@@ -210,6 +223,112 @@ public class TestSubmissionServiceImpl implements TestSubmissionService {
         } catch (Exception e) {
             throw new TestSubmissionException("Failed to delete submission", e);
         }
+    }
+
+    @Override
+    public TestSubmissionResponseDTO evaluateSubmission(TestSubmissionRequestDTO requestDTO) {
+        // Validate test exists
+        Test test = testRepository.findById(requestDTO.getTestId())
+                .orElseThrow(
+                        () -> new TestSubmissionException("Test with ID " + requestDTO.getTestId() + " not found"));
+
+        // Validate submission time
+        if (requestDTO.getSubmittedAt() == null) {
+            requestDTO.setSubmittedAt(LocalDateTime.now());
+        }
+
+        // Validate time spent
+        if (requestDTO.getTimeSpent() == null || requestDTO.getTimeSpent() < 0) {
+            throw new TestSubmissionException("Time spent must be a positive number");
+        }
+
+        // Get questions from selected test parts
+        Set<Question> testQuestions;
+        Set<TestPart> selectedParts;
+        if (requestDTO.getPartIds() != null && !requestDTO.getPartIds().isEmpty()) {
+            // Get questions only from selected parts
+            selectedParts = test.getTestParts().stream()
+                    .filter(part -> requestDTO.getPartIds().contains(part.getId()))
+                    .collect(Collectors.toSet());
+
+            if (selectedParts.isEmpty()) {
+                throw new TestSubmissionException("No valid test parts selected");
+            }
+
+            testQuestions = selectedParts.stream()
+                    .flatMap(part -> part.getQuestions().stream())
+                    .collect(Collectors.toSet());
+
+            if (testQuestions.isEmpty()) {
+                throw new TestSubmissionException("No questions found in the selected test parts");
+            }
+        } else {
+            // Get all questions if no parts specified
+            selectedParts = new HashSet<>(test.getTestParts());
+            testQuestions = selectedParts.stream()
+                    .flatMap(part -> part.getQuestions().stream())
+                    .collect(Collectors.toSet());
+
+            if (testQuestions.isEmpty()) {
+                throw new TestSubmissionException("Test has no questions");
+            }
+        }
+
+        // Create a temporary submission object for evaluation only
+        TestSubmission tempSubmission = new TestSubmission();
+        tempSubmission.setTest(test);
+        tempSubmission.setSubmittedAt(requestDTO.getSubmittedAt());
+        tempSubmission.setStatus("EVALUATED");
+        tempSubmission.setTimeSpent(requestDTO.getTimeSpent());
+
+        // Add selected parts to submission
+        for (TestPart part : selectedParts) {
+            TestSubmissionPart submissionPart = new TestSubmissionPart();
+            submissionPart.setPart(part);
+            tempSubmission.addSubmissionPart(submissionPart);
+        }
+
+        // Process submitted answers if any
+        if (requestDTO.getSubmittedAnswers() != null && !requestDTO.getSubmittedAnswers().isEmpty()) {
+            for (SubmittedAnswerRequestDTO answerDTO : requestDTO.getSubmittedAnswers()) {
+                // Validate question exists and belongs to the test
+                Question question = questionRepository.findById(answerDTO.getQuestionId())
+                        .orElseThrow(() -> new TestSubmissionException(
+                                "Question with ID " + answerDTO.getQuestionId() + " not found"));
+
+                if (!testQuestions.contains(question)) {
+                    throw new TestSubmissionException(
+                            "Question with ID " + answerDTO.getQuestionId()
+                                    + " does not belong to the selected test parts");
+                }
+
+                // Skip part instruction questions
+                if (question.getType().getName().equals("Part Instruction")) {
+                    continue;
+                }
+
+                // Validate answer based on question type
+                validateAnswerForQuestionType(question, answerDTO);
+
+                SubmittedAnswer answer = new SubmittedAnswer();
+                answer.setQuestion(question);
+                answer.setWrittenAnswer(answerDTO.getWrittenAnswer());
+                if (answerDTO.getSelectedOptions() != null) {
+                    answer.setSelectedOptionIds(answerDTO.getSelectedOptions().stream()
+                            .map(SelectedOptionDTO::getOptionId)
+                            .collect(Collectors.toList()));
+                }
+
+                // Calculate if the answer is correct based on question type
+                boolean isCorrect = calculateAnswerCorrectness(question, answerDTO);
+                answer.setIsCorrect(isCorrect);
+
+                tempSubmission.addSubmittedAnswer(answer);
+            }
+        }
+
+        // Just return the evaluation results without saving
+        return convertToDetailedResponseDTO(tempSubmission);
     }
 
     private void validateAnswerForQuestionType(Question question, SubmittedAnswerRequestDTO answerDTO) {
@@ -343,13 +462,21 @@ public class TestSubmissionServiceImpl implements TestSubmissionService {
         return writtenAnswer.trim().equalsIgnoreCase(correctAnswer.trim());
     }
 
-    private TestSubmissionResponseDTO convertToResponseDTO(TestSubmission submission) {
+    private TestSubmissionResponseDTO convertToDetailedResponseDTO(TestSubmission submission) {
         TestSubmissionResponseDTO dto = new TestSubmissionResponseDTO();
         dto.setId(submission.getId());
         dto.setTestId(submission.getTest().getId());
         dto.setUserId(submission.getUserId());
         dto.setSubmittedAt(submission.getSubmittedAt());
         dto.setStatus(submission.getStatus());
+        dto.setTimeSpent(submission.getTimeSpent());
+
+        // Add test information
+        Test test = submission.getTest();
+        dto.setTestTypeId(test.getType().getId());
+        dto.setTestTypeName(test.getType().getName());
+        dto.setTestTitle(test.getTitle());
+        dto.setInstructorName(test.getInstructorName());
 
         // Calculate total statistics
         int totalCorrect = 0;
@@ -372,42 +499,252 @@ public class TestSubmissionServiceImpl implements TestSubmissionService {
             partDTO.setPartDescription(part.getDescription());
             partDTO.setPartDuration(part.getDuration());
             partDTO.setPartIcon(part.getIcon());
+            partDTO.setPartOrder(part.getOrder());
+            partDTO.setAudioUrl(part.getAudioUrl());
 
-            // Calculate part statistics
+            // Get all questions for this part
+            List<Question> partQuestions = part.getQuestions();
+            List<SubmittedAnswerResponseDTO> answerDTOs = new ArrayList<>();
+
+            // Create a map of submitted answers for quick lookup
+            Map<Integer, SubmittedAnswer> submittedAnswersMap = partAnswers.stream()
+                    .collect(Collectors.toMap(
+                            answer -> answer.getQuestion().getId(),
+                            answer -> answer));
+
+            // Process all questions in the part
+            for (Question question : partQuestions) {
+                // Remove the instruction part question exclusion here
+                SubmittedAnswerResponseDTO answerDTO = new SubmittedAnswerResponseDTO();
+                answerDTO.setQuestionId(question.getId());
+                answerDTO.setQuestionTitle(question.getTitle());
+                answerDTO.setQuestionInstruction(question.getQuestionInstruction());
+                answerDTO.setAnswerInstruction(question.getAnswerInstruction());
+                answerDTO.setImageUrl(question.getImageUrl());
+                answerDTO.setReadingPassage(question.getReadingPassage());
+                answerDTO.setQuestionType(question.getType().getName());
+                answerDTO.setOrder(question.getOrder());
+
+                // Add question options
+                answerDTO.setQuestionOptions(
+                        question.getQuestionOptions() != null ? question.getQuestionOptions().stream()
+                                .map(option -> {
+                                    QuestionOptionDTO optionDTO = new QuestionOptionDTO();
+                                    optionDTO.setId(option.getId());
+                                    optionDTO.setOptionId(option.getOptionId());
+                                    optionDTO.setText(option.getText());
+                                    return optionDTO;
+                                })
+                                .collect(Collectors.toList()) : new ArrayList<>());
+
+                // If there's a submitted answer for this question, use it
+                SubmittedAnswer submittedAnswer = submittedAnswersMap.get(question.getId());
+                if (submittedAnswer != null) {
+                    answerDTO.setId(submittedAnswer.getId());
+                    answerDTO.setWrittenAnswer(submittedAnswer.getWrittenAnswer());
+                    answerDTO.setIsCorrect(submittedAnswer.getIsCorrect());
+                    answerDTO.setSelectedOptionIds(submittedAnswer.getSelectedOptionIds());
+                } else {
+                    // For unanswered questions, set default values
+                    answerDTO.setWrittenAnswer(null);
+                    answerDTO.setIsCorrect(false);
+                    answerDTO.setSelectedOptionIds(null);
+                }
+
+                // Always include the correct answer
+                String typeName = question.getType().getName();
+                if (typeName.equals("Multiple Choice")) {
+                    // For multiple choice, return the list of correct option IDs
+                    answerDTO.setCorrectAnswer(question.getCorrectAnswer());
+                    answerDTO.setOrder(question.getOrder());
+                } else if (typeName.equals("Single Choice")) {
+                    // For single choice, return the single correct option ID
+                    answerDTO.setCorrectAnswer(question.getCorrectAnswer());
+                    answerDTO.setOrder(question.getOrder());
+                } else {
+                    // For other types (like Fill in Blank), return the correct answer as is
+                    answerDTO.setCorrectAnswer(question.getCorrectAnswer());
+                    answerDTO.setOrder(question.getOrder());
+                }
+
+                answerDTOs.add(answerDTO);
+            }
+
+            // Calculate part statistics - keep the instruction part exclusion here
             int partCorrect = (int) partAnswers.stream()
+                    .filter(answer -> !answer.getQuestion().getType().getName().equals("Part Instruction"))
                     .filter(SubmittedAnswer::getIsCorrect)
                     .count();
-            int partTotal = partAnswers.size();
-
+            int partTotal = (int) partQuestions.stream()
+                    .filter(question -> !question.getType().getName().equals("Part Instruction"))
+                    .count();
             partDTO.setCorrectAnswers(partCorrect);
             partDTO.setTotalQuestions(partTotal);
+            partDTO.setPartScore(partTotal > 0 ? Math.round((double) partCorrect / partTotal * 100.0) / 100.0 : 0.0);
 
-            // Add answers for this part
-            List<SubmittedAnswerResponseDTO> answerDTOs = partAnswers.stream()
-                    .map(this::convertToAnswerResponseDTO)
-                    .collect(Collectors.toList());
+            // Always include answers for detailed view
             partDTO.setAnswers(answerDTOs);
 
-            partSubmissions.add(partDTO);
-
-            // Update total statistics
             totalCorrect += partCorrect;
             totalQuestions += partTotal;
+
+            partSubmissions.add(partDTO);
         }
 
-        dto.setPartSubmissions(partSubmissions);
         dto.setTotalCorrectAnswers(totalCorrect);
         dto.setTotalQuestions(totalQuestions);
+        dto.setPartSubmissions(partSubmissions);
 
         return dto;
     }
 
-    private SubmittedAnswerResponseDTO convertToAnswerResponseDTO(SubmittedAnswer answer) {
-        SubmittedAnswerResponseDTO dto = new SubmittedAnswerResponseDTO();
-        dto.setId(answer.getId());
-        dto.setQuestionId(answer.getQuestion().getId());
-        dto.setWrittenAnswer(answer.getWrittenAnswer());
-        dto.setIsCorrect(answer.getIsCorrect());
+    private TestSubmissionResponseDTO convertToResponseDTO(TestSubmission submission) {
+        TestSubmissionResponseDTO dto = new TestSubmissionResponseDTO();
+        dto.setId(submission.getId());
+        dto.setTestId(submission.getTest().getId());
+        dto.setUserId(submission.getUserId());
+        dto.setSubmittedAt(submission.getSubmittedAt());
+        dto.setStatus(submission.getStatus());
+        dto.setTimeSpent(submission.getTimeSpent());
+
+        // Add test information
+        Test test = submission.getTest();
+        dto.setTestTypeId(test.getType().getId());
+        dto.setTestTypeName(test.getType().getName());
+        dto.setTestTitle(test.getTitle());
+        dto.setInstructorName(test.getInstructorName());
+
+        // Calculate total statistics
+        int totalCorrect = 0;
+        int totalQuestions = 0;
+
+        // Group answers by part
+        Map<TestPart, List<SubmittedAnswer>> answersByPart = submission.getSubmittedAnswers().stream()
+                .collect(Collectors.groupingBy(answer -> answer.getQuestion().getPart()));
+
+        List<TestPartSubmissionDTO> partSubmissions = new ArrayList<>();
+
+        // Process each part
+        for (TestSubmissionPart submissionPart : submission.getSubmissionParts()) {
+            TestPart part = submissionPart.getPart();
+            List<SubmittedAnswer> partAnswers = answersByPart.getOrDefault(part, new ArrayList<>());
+
+            TestPartSubmissionDTO partDTO = new TestPartSubmissionDTO();
+            partDTO.setPartId(part.getId());
+            partDTO.setPartName(part.getName());
+            partDTO.setPartDescription(part.getDescription());
+            partDTO.setPartDuration(part.getDuration());
+            partDTO.setPartIcon(part.getIcon());
+            partDTO.setPartOrder(part.getOrder());
+            partDTO.setAudioUrl(part.getAudioUrl());
+
+            // Get all questions for this part
+            List<Question> partQuestions = part.getQuestions();
+
+            // Only include detailed answers if flag is set
+            if (dto.isIncludeDetailedAnswers()) {
+                List<SubmittedAnswerResponseDTO> answerDTOs = new ArrayList<>();
+
+                // Create a map of submitted answers for quick lookup
+                Map<Integer, SubmittedAnswer> submittedAnswersMap = partAnswers.stream()
+                        .collect(Collectors.toMap(
+                                answer -> answer.getQuestion().getId(),
+                                answer -> answer));
+
+                // Process all questions in the part
+                for (Question question : partQuestions) {
+                    // Remove the instruction part question exclusion here
+                    SubmittedAnswerResponseDTO answerDTO = new SubmittedAnswerResponseDTO();
+                    answerDTO.setQuestionId(question.getId());
+                    answerDTO.setQuestionTitle(question.getTitle());
+                    answerDTO.setQuestionInstruction(question.getQuestionInstruction());
+                    answerDTO.setAnswerInstruction(question.getAnswerInstruction());
+                    answerDTO.setImageUrl(question.getImageUrl());
+                    answerDTO.setReadingPassage(question.getReadingPassage());
+                    answerDTO.setQuestionType(question.getType().getName());
+                    answerDTO.setOrder(question.getOrder());
+
+                    // Add question options
+                    answerDTO.setQuestionOptions(
+                            question.getQuestionOptions() != null ? question.getQuestionOptions().stream()
+                                    .map(option -> {
+                                        QuestionOptionDTO optionDTO = new QuestionOptionDTO();
+                                        optionDTO.setId(option.getId());
+                                        optionDTO.setOptionId(option.getOptionId());
+                                        optionDTO.setText(option.getText());
+                                        return optionDTO;
+                                    })
+                                    .collect(Collectors.toList()) : new ArrayList<>());
+
+                    // If there's a submitted answer for this question, use it
+                    SubmittedAnswer submittedAnswer = submittedAnswersMap.get(question.getId());
+                    if (submittedAnswer != null) {
+                        answerDTO.setId(submittedAnswer.getId());
+                        answerDTO.setWrittenAnswer(submittedAnswer.getWrittenAnswer());
+                        answerDTO.setIsCorrect(submittedAnswer.getIsCorrect());
+                        answerDTO.setSelectedOptionIds(submittedAnswer.getSelectedOptionIds());
+                    } else {
+                        // For unanswered questions, set default values
+                        answerDTO.setWrittenAnswer(null);
+                        answerDTO.setIsCorrect(false);
+                        answerDTO.setSelectedOptionIds(null);
+                    }
+
+                    // Always include the correct answer
+                    String typeName = question.getType().getName();
+                    if (typeName.equals("Multiple Choice")) {
+                        // For multiple choice, return the list of correct option IDs
+                        answerDTO.setCorrectAnswer(question.getCorrectAnswer());
+                        answerDTO.setOrder(question.getOrder());
+                    } else if (typeName.equals("Single Choice")) {
+                        // For single choice, return the single correct option ID
+                        answerDTO.setCorrectAnswer(question.getCorrectAnswer());
+                        answerDTO.setOrder(question.getOrder());
+                    } else {
+                        // For other types (like Fill in Blank), return the correct answer as is
+                        answerDTO.setCorrectAnswer(question.getCorrectAnswer());
+                        answerDTO.setOrder(question.getOrder());
+                    }
+
+                    // Add question options
+                    answerDTO.setQuestionOptions(
+                            question.getQuestionOptions() != null ? question.getQuestionOptions().stream()
+                                    .map(option -> {
+                                        QuestionOptionDTO optionDTO = new QuestionOptionDTO();
+                                        optionDTO.setId(option.getId());
+                                        optionDTO.setOptionId(option.getOptionId());
+                                        optionDTO.setText(option.getText());
+                                        return optionDTO;
+                                    })
+                                    .collect(Collectors.toList()) : new ArrayList<>());
+
+                    answerDTOs.add(answerDTO);
+                }
+                partDTO.setAnswers(answerDTOs);
+            }
+
+            // Calculate part statistics - keep the instruction part exclusion here
+            int partCorrect = (int) partAnswers.stream()
+                    .filter(answer -> !answer.getQuestion().getType().getName().equals("Part Instruction"))
+                    .filter(SubmittedAnswer::getIsCorrect)
+                    .count();
+            int partTotal = (int) partQuestions.stream()
+                    .filter(question -> !question.getType().getName().equals("Part Instruction"))
+                    .count();
+            partDTO.setCorrectAnswers(partCorrect);
+            partDTO.setTotalQuestions(partTotal);
+            partDTO.setPartScore(partTotal > 0 ? Math.round((double) partCorrect / partTotal * 100.0) / 100.0 : 0.0);
+
+            totalCorrect += partCorrect;
+            totalQuestions += partTotal;
+
+            partSubmissions.add(partDTO);
+        }
+
+        dto.setTotalCorrectAnswers(totalCorrect);
+        dto.setTotalQuestions(totalQuestions);
+        dto.setPartSubmissions(partSubmissions);
+
         return dto;
     }
 }

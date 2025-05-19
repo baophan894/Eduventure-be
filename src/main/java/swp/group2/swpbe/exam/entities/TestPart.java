@@ -32,6 +32,12 @@ public class TestPart {
     @Column(name = "description")
     private String description;
 
+    @Column(name = "part_order", nullable = false)
+    private Integer order;
+
+    @Column(name = "audio_url")
+    private String audioUrl;
+
     @OneToMany(mappedBy = "part", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Question> questions;
 }

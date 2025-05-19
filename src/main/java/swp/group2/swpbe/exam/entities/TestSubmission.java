@@ -38,6 +38,9 @@ public class TestSubmission {
     @Column(name = "status", nullable = false)
     private String status;
 
+    @Column(name = "time_spent", nullable = false)
+    private Integer timeSpent; // Time spent in seconds
+
     @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SubmittedAnswer> submittedAnswers = new ArrayList<>();
 

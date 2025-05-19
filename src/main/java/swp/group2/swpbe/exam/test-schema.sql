@@ -35,9 +35,7 @@ CREATE TABLE tests (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     cover_img VARCHAR(255),
-    views INT DEFAULT 0,
-    ratings FLOAT DEFAULT 0,
-    review_count INT DEFAULT 0,
+    views INT NOT NULL DEFAULT 0,
     duration INT NOT NULL, -- in seconds
     difficulty VARCHAR(50),
     last_updated DATETIME,
@@ -45,6 +43,7 @@ CREATE TABLE tests (
     instructor_title VARCHAR(100),
     instructor_experience VARCHAR(50),
     instructor_description TEXT,
+    instructor_avatar VARCHAR(255),
     FOREIGN KEY (type) REFERENCES test_types(id)
 );
 

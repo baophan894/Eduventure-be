@@ -11,6 +11,13 @@ public class TestSubmissionResponseDTO {
     private Long userId;
     private LocalDateTime submittedAt;
     private String status;
+    private Integer timeSpent; // Time spent in seconds
+
+    // Test information
+    private Integer testTypeId;
+    private String testTypeName;
+    private String testTitle;
+    private String instructorName;
 
     // Statistics
     private Integer totalCorrectAnswers;
@@ -18,4 +25,7 @@ public class TestSubmissionResponseDTO {
 
     // Grouped answers by part
     private List<TestPartSubmissionDTO> partSubmissions;
+
+    // Flag to control whether to include detailed answers
+    private boolean includeDetailedAnswers = false;
 }

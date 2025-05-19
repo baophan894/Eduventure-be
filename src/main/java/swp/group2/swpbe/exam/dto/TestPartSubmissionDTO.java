@@ -10,6 +10,8 @@ public class TestPartSubmissionDTO {
     private String partDescription;
     private Integer partDuration;
     private String partIcon;
+    private Integer partOrder;
+    private String audioUrl;
 
     // Part-specific statistics
     private Integer correctAnswers;
