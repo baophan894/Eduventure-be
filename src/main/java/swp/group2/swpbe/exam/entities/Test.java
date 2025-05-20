@@ -64,9 +64,6 @@ public class Test {
     private List<TestRequirement> testRequirements = new ArrayList<>();
 
     @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<TestTargetScore> testTargetScores = new ArrayList<>();
-
-    @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TestReview> testReviews = new ArrayList<>();
 
     // Helper methods for collection management
@@ -98,16 +95,6 @@ public class Test {
     public void removeTestRequirement(TestRequirement requirement) {
         testRequirements.remove(requirement);
         requirement.setTest(null);
-    }
-
-    public void addTestTargetScore(TestTargetScore targetScore) {
-        testTargetScores.add(targetScore);
-        targetScore.setTest(this);
-    }
-
-    public void removeTestTargetScore(TestTargetScore targetScore) {
-        testTargetScores.remove(targetScore);
-        targetScore.setTest(null);
     }
 
     public void addTestReview(TestReview review) {

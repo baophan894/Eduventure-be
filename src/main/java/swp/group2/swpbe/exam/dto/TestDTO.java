@@ -22,6 +22,8 @@ public class TestDTO {
     private Integer duration;
     private String testLevel;
     private Integer testLevelId;
+    private Integer languageId;
+    private String languageName;
     private LocalDateTime lastUpdated;
     private String instructorName;
     private String instructorTitle;
@@ -30,6 +32,5 @@ public class TestDTO {
     private String instructorAvatar;
     private List<String> testFeatures;
     private List<String> testRequirements;
-    private List<String> testTargetScores;
     private List<TestPartDTO> testParts;
 }

@@ -23,6 +23,8 @@ public class TestListDTO {
     private Integer duration;
     private String testLevel;
     private Integer testLevelId;
+    private Integer languageId;
+    private String languageName;
     private LocalDateTime lastUpdated;
     private String instructorName;
     private String instructorTitle;
@@ -31,7 +33,6 @@ public class TestListDTO {
     private String instructorAvatar;
     private List<String> testFeatures;
     private List<String> testRequirements;
-    private List<String> testTargetScores;
 
     public TestListDTO(Integer id, Integer typeId, String title, String description, String coverImg,
             Integer views, Integer duration, String testLevel, LocalDateTime lastUpdated,

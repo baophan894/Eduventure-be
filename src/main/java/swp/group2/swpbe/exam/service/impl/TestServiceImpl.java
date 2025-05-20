@@ -30,7 +30,6 @@ import swp.group2.swpbe.exam.entities.TestFeature;
 import swp.group2.swpbe.exam.entities.TestPart;
 import swp.group2.swpbe.exam.entities.TestRequirement;
 import swp.group2.swpbe.exam.entities.TestSubmission;
-import swp.group2.swpbe.exam.entities.TestTargetScore;
 import swp.group2.swpbe.exam.entities.TestType;
 import swp.group2.swpbe.exam.entities.TestLevel;
 import swp.group2.swpbe.exam.repository.TestRepository;
@@ -138,70 +137,32 @@ public class TestServiceImpl implements TestService {
 
         // Update test requirements
         if (testDTO.getTestRequirements() != null) {
-            // Create a map of existing requirements by requirement text for quick lookup
-            Map<String, TestRequirement> existingRequirements = test.getTestRequirements().stream()
-                    .collect(Collectors.toMap(TestRequirement::getRequirement, requirement -> requirement));
+            // Clear existing requirements
+            test.getTestRequirements().clear();
 
-            // Process each requirement from the DTO
+            // Add new requirements
             for (String requirementText : testDTO.getTestRequirements()) {
-                TestRequirement requirement;
-                if (existingRequirements.containsKey(requirementText)) {
-                    // Update existing requirement
-                    requirement = existingRequirements.get(requirementText);
-                    existingRequirements.remove(requirementText);
-                } else {
-                    // Create new requirement
-                    requirement = new TestRequirement();
+                if (requirementText != null && !requirementText.trim().isEmpty()) {
+                    TestRequirement requirement = new TestRequirement();
+                    requirement.setRequirement(requirementText.trim());
                     test.addTestRequirement(requirement);
                 }
-                requirement.setRequirement(requirementText);
             }
-
-            // Remove any remaining requirements that weren't updated
-            for (TestRequirement requirement : existingRequirements.values()) {
-                test.removeTestRequirement(requirement);
-            }
-        }
-
-        // Handle target scores
-        Map<String, TestTargetScore> existingTargetScores = test.getTestTargetScores().stream()
-                .collect(Collectors.toMap(TestTargetScore::getScore, Function.identity()));
-
-        if (testDTO.getTestTargetScores() != null) {
-            for (String scoreText : testDTO.getTestTargetScores()) {
-                if (existingTargetScores.containsKey(scoreText)) {
-                    // Update existing target score
-                    TestTargetScore existingScore = existingTargetScores.get(scoreText);
-                    existingScore.setScore(scoreText);
-                    existingTargetScores.remove(scoreText);
-                } else {
-                    // Create new target score
-                    TestTargetScore newScore = new TestTargetScore();
-                    newScore.setTest(test);
-                    newScore.setScore(scoreText);
-                    test.getTestTargetScores().add(newScore);
-                }
-            }
-        }
-
-        // Remove any remaining target scores that weren't in the new list
-        for (TestTargetScore oldScore : existingTargetScores.values()) {
-            test.getTestTargetScores().remove(oldScore);
         }
 
         // Update test parts
         if (testDTO.getTestParts() != null) {
-            // Create a map of existing test parts by name for quick lookup
-            Map<String, TestPart> existingParts = test.getTestParts().stream()
-                    .collect(Collectors.toMap(TestPart::getName, part -> part));
+            // Create a map of existing test parts by ID for quick lookup
+            Map<Integer, TestPart> existingParts = test.getTestParts().stream()
+                    .collect(Collectors.toMap(TestPart::getId, part -> part));
 
             // Process each part from the DTO
             for (TestPartDTO partDTO : testDTO.getTestParts()) {
                 TestPart part;
-                if (existingParts.containsKey(partDTO.getName())) {
+                if (partDTO.getId() != null && existingParts.containsKey(partDTO.getId())) {
                     // Update existing part
-                    part = existingParts.get(partDTO.getName());
-                    existingParts.remove(partDTO.getName());
+                    part = existingParts.get(partDTO.getId());
+                    existingParts.remove(partDTO.getId());
                 } else {
                     // Create new part
                     part = new TestPart();
@@ -222,17 +183,17 @@ public class TestServiceImpl implements TestService {
 
                 // Update questions
                 if (partDTO.getQuestions() != null) {
-                    // Create a map of existing questions by title for quick lookup
-                    Map<String, Question> existingQuestions = part.getQuestions().stream()
-                            .collect(Collectors.toMap(Question::getTitle, question -> question));
+                    // Create a map of existing questions by ID for quick lookup
+                    Map<Integer, Question> existingQuestions = part.getQuestions().stream()
+                            .collect(Collectors.toMap(Question::getId, question -> question));
 
                     // Process each question from the DTO
                     for (QuestionDTO questionDTO : partDTO.getQuestions()) {
                         Question question;
-                        if (existingQuestions.containsKey(questionDTO.getTitle())) {
+                        if (questionDTO.getId() != null && existingQuestions.containsKey(questionDTO.getId())) {
                             // Update existing question
-                            question = existingQuestions.get(questionDTO.getTitle());
-                            existingQuestions.remove(questionDTO.getTitle());
+                            question = existingQuestions.get(questionDTO.getId());
+                            existingQuestions.remove(questionDTO.getId());
                         } else {
                             // Create new question
                             question = new Question();
@@ -260,17 +221,17 @@ public class TestServiceImpl implements TestService {
 
                         // Update question options
                         if (questionDTO.getQuestionOptions() != null) {
-                            // Create a map of existing options by optionId for quick lookup
-                            Map<String, QuestionOption> existingOptions = question.getQuestionOptions().stream()
-                                    .collect(Collectors.toMap(QuestionOption::getOptionId, option -> option));
+                            // Create a map of existing options by ID for quick lookup
+                            Map<Integer, QuestionOption> existingOptions = question.getQuestionOptions().stream()
+                                    .collect(Collectors.toMap(QuestionOption::getId, option -> option));
 
                             // Process each option from the DTO
                             for (QuestionOptionDTO optionDTO : questionDTO.getQuestionOptions()) {
                                 QuestionOption option;
-                                if (existingOptions.containsKey(optionDTO.getOptionId())) {
+                                if (optionDTO.getId() != null && existingOptions.containsKey(optionDTO.getId())) {
                                     // Update existing option
-                                    option = existingOptions.get(optionDTO.getOptionId());
-                                    existingOptions.remove(optionDTO.getOptionId());
+                                    option = existingOptions.get(optionDTO.getId());
+                                    existingOptions.remove(optionDTO.getId());
                                 } else {
                                     // Create new option
                                     option = new QuestionOption();
@@ -531,45 +492,19 @@ public class TestServiceImpl implements TestService {
             }
         }
 
-        // Handle target scores
-        Map<String, TestTargetScore> existingTargetScores = test.getTestTargetScores().stream()
-                .collect(Collectors.toMap(TestTargetScore::getScore, Function.identity()));
-
-        if (dto.getTestTargetScores() != null) {
-            for (String scoreText : dto.getTestTargetScores()) {
-                if (existingTargetScores.containsKey(scoreText)) {
-                    // Update existing target score
-                    TestTargetScore existingScore = existingTargetScores.get(scoreText);
-                    existingScore.setScore(scoreText);
-                    existingTargetScores.remove(scoreText);
-                } else {
-                    // Create new target score
-                    TestTargetScore newScore = new TestTargetScore();
-                    newScore.setTest(test);
-                    newScore.setScore(scoreText);
-                    test.getTestTargetScores().add(newScore);
-                }
-            }
-        }
-
-        // Remove any remaining target scores that weren't in the new list
-        for (TestTargetScore oldScore : existingTargetScores.values()) {
-            test.getTestTargetScores().remove(oldScore);
-        }
-
         // Update test parts
         if (dto.getTestParts() != null) {
-            // Create a map of existing test parts by name for quick lookup
-            Map<String, TestPart> existingParts = test.getTestParts().stream()
-                    .collect(Collectors.toMap(TestPart::getName, part -> part));
+            // Create a map of existing test parts by ID for quick lookup
+            Map<Integer, TestPart> existingParts = test.getTestParts().stream()
+                    .collect(Collectors.toMap(TestPart::getId, part -> part));
 
             // Process each part from the DTO
             for (TestPartDTO partDTO : dto.getTestParts()) {
                 TestPart part;
-                if (existingParts.containsKey(partDTO.getName())) {
+                if (partDTO.getId() != null && existingParts.containsKey(partDTO.getId())) {
                     // Update existing part
-                    part = existingParts.get(partDTO.getName());
-                    existingParts.remove(partDTO.getName());
+                    part = existingParts.get(partDTO.getId());
+                    existingParts.remove(partDTO.getId());
                 } else {
                     // Create new part
                     part = new TestPart();
@@ -590,17 +525,17 @@ public class TestServiceImpl implements TestService {
 
                 // Update questions
                 if (partDTO.getQuestions() != null) {
-                    // Create a map of existing questions by title for quick lookup
-                    Map<String, Question> existingQuestions = part.getQuestions().stream()
-                            .collect(Collectors.toMap(Question::getTitle, question -> question));
+                    // Create a map of existing questions by ID for quick lookup
+                    Map<Integer, Question> existingQuestions = part.getQuestions().stream()
+                            .collect(Collectors.toMap(Question::getId, question -> question));
 
                     // Process each question from the DTO
                     for (QuestionDTO questionDTO : partDTO.getQuestions()) {
                         Question question;
-                        if (existingQuestions.containsKey(questionDTO.getTitle())) {
+                        if (questionDTO.getId() != null && existingQuestions.containsKey(questionDTO.getId())) {
                             // Update existing question
-                            question = existingQuestions.get(questionDTO.getTitle());
-                            existingQuestions.remove(questionDTO.getTitle());
+                            question = existingQuestions.get(questionDTO.getId());
+                            existingQuestions.remove(questionDTO.getId());
                         } else {
                             // Create new question
                             question = new Question();
@@ -628,17 +563,17 @@ public class TestServiceImpl implements TestService {
 
                         // Update question options
                         if (questionDTO.getQuestionOptions() != null) {
-                            // Create a map of existing options by optionId for quick lookup
-                            Map<String, QuestionOption> existingOptions = question.getQuestionOptions().stream()
-                                    .collect(Collectors.toMap(QuestionOption::getOptionId, option -> option));
+                            // Create a map of existing options by ID for quick lookup
+                            Map<Integer, QuestionOption> existingOptions = question.getQuestionOptions().stream()
+                                    .collect(Collectors.toMap(QuestionOption::getId, option -> option));
 
                             // Process each option from the DTO
                             for (QuestionOptionDTO optionDTO : questionDTO.getQuestionOptions()) {
                                 QuestionOption option;
-                                if (existingOptions.containsKey(optionDTO.getOptionId())) {
+                                if (optionDTO.getId() != null && existingOptions.containsKey(optionDTO.getId())) {
                                     // Update existing option
-                                    option = existingOptions.get(optionDTO.getOptionId());
-                                    existingOptions.remove(optionDTO.getOptionId());
+                                    option = existingOptions.get(optionDTO.getId());
+                                    existingOptions.remove(optionDTO.getId());
                                 } else {
                                     // Create new option
                                     option = new QuestionOption();
@@ -682,6 +617,11 @@ public class TestServiceImpl implements TestService {
         dto.setViews(test.getViews());
         dto.setTestLevel(test.getTestLevel() != null ? test.getTestLevel().getName() : null);
         dto.setTestLevelId(test.getTestLevel() != null ? test.getTestLevel().getId() : null);
+        // Add language information
+        if (test.getTestLevel() != null && test.getTestLevel().getLanguage() != null) {
+            dto.setLanguageId(test.getTestLevel().getLanguage().getId());
+            dto.setLanguageName(test.getTestLevel().getLanguage().getName());
+        }
         dto.setInstructorName(test.getInstructorName());
         dto.setInstructorTitle(test.getInstructorTitle());
         dto.setInstructorExperience(test.getInstructorExperience());
@@ -708,11 +648,6 @@ public class TestServiceImpl implements TestService {
         // Convert test requirements
         dto.setTestRequirements(test.getTestRequirements().stream()
                 .map(TestRequirement::getRequirement)
-                .collect(Collectors.toList()));
-
-        // Convert test target scores
-        dto.setTestTargetScores(test.getTestTargetScores().stream()
-                .map(TestTargetScore::getScore)
                 .collect(Collectors.toList()));
 
         // Convert test parts
@@ -734,6 +669,11 @@ public class TestServiceImpl implements TestService {
         dto.setViews(test.getViews());
         dto.setTestLevel(test.getTestLevel() != null ? test.getTestLevel().getName() : null);
         dto.setTestLevelId(test.getTestLevel() != null ? test.getTestLevel().getId() : null);
+        // Add language information
+        if (test.getTestLevel() != null && test.getTestLevel().getLanguage() != null) {
+            dto.setLanguageId(test.getTestLevel().getLanguage().getId());
+            dto.setLanguageName(test.getTestLevel().getLanguage().getName());
+        }
         dto.setInstructorName(test.getInstructorName());
         dto.setInstructorTitle(test.getInstructorTitle());
         dto.setInstructorExperience(test.getInstructorExperience());
@@ -760,11 +700,6 @@ public class TestServiceImpl implements TestService {
         // Convert test requirements
         dto.setTestRequirements(test.getTestRequirements().stream()
                 .map(TestRequirement::getRequirement)
-                .collect(Collectors.toList()));
-
-        // Convert test target scores
-        dto.setTestTargetScores(test.getTestTargetScores().stream()
-                .map(TestTargetScore::getScore)
                 .collect(Collectors.toList()));
 
         return dto;
