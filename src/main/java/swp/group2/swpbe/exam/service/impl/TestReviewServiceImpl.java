@@ -173,6 +173,11 @@ public class TestReviewServiceImpl implements TestReviewService {
                 testReviewRepository.delete(review);
         }
 
+        @Override
+        public boolean hasUserReviewed(Integer testId, Long userId) {
+                return testReviewRepository.findByTestIdAndUserId(testId, userId) != null;
+        }
+
         private TestReviewDTO convertToDTO(TestReview review) {
                 User user = userRepository.findById(review.getUserId().intValue());
                 String userFullName = user != null ? user.getFullName() : null;

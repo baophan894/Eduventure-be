@@ -16,4 +16,6 @@ public interface TestReviewService {
     TestReviewDTO updateReview(Integer testId, Integer reviewId, TestReviewDTO reviewDTO);
 
     void deleteReview(Integer testId, Integer reviewId);
+
+    boolean hasUserReviewed(Integer testId, Long userId);
 }
