@@ -36,6 +36,8 @@ import swp.group2.swpbe.exam.repository.TestRepository;
 import swp.group2.swpbe.exam.repository.TestReviewRepository;
 import swp.group2.swpbe.exam.repository.TestSubmissionRepository;
 import swp.group2.swpbe.exam.repository.TestLevelRepository;
+import swp.group2.swpbe.exam.repository.TestTypeRepository;
+import swp.group2.swpbe.exam.repository.QuestionTypeRepository;
 import swp.group2.swpbe.exam.service.TestService;
 
 @Slf4j
@@ -53,6 +55,12 @@ public class TestServiceImpl implements TestService {
 
     @Autowired
     private TestLevelRepository testLevelRepository;
+
+    @Autowired
+    private TestTypeRepository testTypeRepository;
+
+    @Autowired
+    private QuestionTypeRepository questionTypeRepository;
 
     @Override
     @Transactional
@@ -104,9 +112,12 @@ public class TestServiceImpl implements TestService {
         test.setInstructorAvatar(testDTO.getInstructorAvatar());
 
         // Set test type
-        TestType testType = new TestType();
-        testType.setId(testDTO.getTypeId());
-        test.setType(testType);
+        if (testDTO.getTypeId() != null) {
+            TestType testType = testTypeRepository.findById(testDTO.getTypeId())
+                    .orElseThrow(
+                            () -> new EntityNotFoundException("Test type not found with id: " + testDTO.getTypeId()));
+            test.setType(testType);
+        }
 
         // Update test features
         if (testDTO.getTestFeatures() != null) {
@@ -210,9 +221,12 @@ public class TestServiceImpl implements TestService {
                         question.setOrder(questionDTO.getOrder());
 
                         // Set question type
-                        QuestionType questionType = new QuestionType();
-                        questionType.setId(questionDTO.getTypeId());
-                        question.setType(questionType);
+                        if (questionDTO.getTypeId() != null) {
+                            QuestionType questionType = questionTypeRepository.findById(questionDTO.getTypeId())
+                                    .orElseThrow(() -> new EntityNotFoundException(
+                                            "Question type not found with id: " + questionDTO.getTypeId()));
+                            question.setType(questionType);
+                        }
 
                         // Initialize question options list if null
                         if (question.getQuestionOptions() == null) {
@@ -434,9 +448,11 @@ public class TestServiceImpl implements TestService {
         test.setInstructorAvatar(dto.getInstructorAvatar());
 
         // Set test type
-        TestType testType = new TestType();
-        testType.setId(dto.getTypeId());
-        test.setType(testType);
+        if (dto.getTypeId() != null) {
+            TestType testType = testTypeRepository.findById(dto.getTypeId())
+                    .orElseThrow(() -> new EntityNotFoundException("Test type not found with id: " + dto.getTypeId()));
+            test.setType(testType);
+        }
 
         // Update test features
         if (dto.getTestFeatures() != null) {
@@ -552,9 +568,12 @@ public class TestServiceImpl implements TestService {
                         question.setOrder(questionDTO.getOrder());
 
                         // Set question type
-                        QuestionType questionType = new QuestionType();
-                        questionType.setId(questionDTO.getTypeId());
-                        question.setType(questionType);
+                        if (questionDTO.getTypeId() != null) {
+                            QuestionType questionType = questionTypeRepository.findById(questionDTO.getTypeId())
+                                    .orElseThrow(() -> new EntityNotFoundException(
+                                            "Question type not found with id: " + questionDTO.getTypeId()));
+                            question.setType(questionType);
+                        }
 
                         // Initialize question options list if null
                         if (question.getQuestionOptions() == null) {

@@ -14,13 +14,13 @@ import swp.group2.swpbe.exam.service.TestReviewService;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/api/tests")
+@RequestMapping("/api/tests/{testId}/reviews")
 public class TestReviewController {
 
     @Autowired
     private TestReviewService testReviewService;
 
-    @GetMapping("/{testId}/reviews")
+    @GetMapping
     public ResponseEntity<TestReviewResponseDTO> getReviewsByTestId(
             @PathVariable Integer testId,
             @RequestParam(defaultValue = "0") int page,
@@ -50,7 +50,7 @@ public class TestReviewController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/{testId}/reviews/{reviewId}")
+    @GetMapping("/{reviewId}")
     public ResponseEntity<TestReviewDTO> getReviewById(
             @PathVariable Integer testId,
             @PathVariable Integer reviewId) {
@@ -58,7 +58,7 @@ public class TestReviewController {
         return ResponseEntity.ok(review);
     }
 
-    @PostMapping("/{testId}/reviews")
+    @PostMapping
     public ResponseEntity<TestReviewDTO> createReview(
             @PathVariable Integer testId,
             @RequestBody TestReviewDTO reviewDTO) {
@@ -66,7 +66,7 @@ public class TestReviewController {
         return ResponseEntity.ok(createdReview);
     }
 
-    @PutMapping("/{testId}/reviews/{reviewId}")
+    @PutMapping("/{reviewId}")
     public ResponseEntity<TestReviewDTO> updateReview(
             @PathVariable Integer testId,
             @PathVariable Integer reviewId,
@@ -75,7 +75,7 @@ public class TestReviewController {
         return ResponseEntity.ok(updatedReview);
     }
 
-    @DeleteMapping("/{testId}/reviews/{reviewId}")
+    @DeleteMapping("/{reviewId}")
     public ResponseEntity<Void> deleteReview(
             @PathVariable Integer testId,
             @PathVariable Integer reviewId) {

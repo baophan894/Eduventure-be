@@ -9,9 +9,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import com.cloudinary.Cloudinary;
 import java.util.HashMap;
 import java.util.Map;
+
 @Configuration
 public class ProjectConfig {
- 
+
   @Value("${allow.origin}")
   private String allowedOrigins;
   @Value("${cloudinary.apiKey}")
@@ -21,10 +22,8 @@ public class ProjectConfig {
   @Value("${cloudinary.name}")
   private String cloudinaryApiName;
 
-  
-  
   @Bean
-   Cloudinary getCloudinary() {
+  Cloudinary getCloudinary() {
     Map<String, Object> config = new HashMap<>();
     config.put("cloud_name", cloudinaryApiName);
     config.put("api_key", cloudinaryApiKey);
@@ -32,7 +31,6 @@ public class ProjectConfig {
     config.put("secure", true);
     return new Cloudinary(config);
   }
-
 
   @Bean
   WebMvcConfigurer corsConfigurer() {
